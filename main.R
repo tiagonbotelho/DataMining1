@@ -9,12 +9,11 @@ info$BlockRange[info$BlockRange=='UNK'] <- NA
 info$Type[info$Type == '-'] <- NA
 info$Suffix[info$Suffix == '-'] <- NA
 
+#Not sure if still needed but it was wrong
 split <- strsplit(as.character(info$BlockRange), "-")
-info$BlockRange <- order(sapply(split, "[", 1))
-
-ola <- info[startsWith(info$Beat, "10"),]
+info.orderedRange <- info[order(strtoi(sapply(split, "[", 1))),]
+ola <- info.orderedRange[startsWith(info.orderedRange$Beat, "10"),]
 ggplot(ola, aes(x=ola$Beat, y=ola$BlockRange, color=ola$Type)) + geom_point()
-
 
 
 #number of crimes per Address (block range, streetname, type, suffix) - all count 1
@@ -52,3 +51,6 @@ count <- arrange(tally(by_street), desc(n))
 head(count)
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(StreetName,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per StreetName")
+
+#number of crimes per hour and type
+ggplot(info, aes(x=Hour, color=Offense.Type)) + geom_histogram(binwidth = 1) + ggtitle("Distribution of crimes per hour and type")
