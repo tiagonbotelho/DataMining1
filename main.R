@@ -5,16 +5,22 @@ library(reshape2)
 library(tidyr)
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
+info
 info$BlockRange[info$BlockRange=='UNK'] <- NA
 info$Type[info$Type == '-'] <- NA
 info$Suffix[info$Suffix == '-'] <- NA
 
-#Not sure if still needed but it was wrong
-split <- strsplit(as.character(info$BlockRange), "-")
-info.orderedRange <- info[order(strtoi(sapply(split, "[", 1))),]
-ola <- info.orderedRange[startsWith(info.orderedRange$Beat, "10"),]
-ggplot(ola, aes(x=ola$Beat, y=ola$BlockRange, color=ola$Type)) + geom_point()
-
+#number of crimes per beat with the types of crimes
+info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
+by_beat_with_group <- group_by(info.df, Beat, BlockRange)
+by_beat <- group_by(info.df, Beat)
+crime_count_with_group <- arrange(tally(by_beat_with_group), desc=-n)
+crime_count <- arrange(tally(by_beat), desc=-n)
+# we only want the top ones
+top_beats <- head(crime_count)
+top_crime_count_with_group <- crime_count_with_group[crime_count_with_group$Beat %in% top_beats$Beat]
+top_crime_count_with_group <- subset(crime_count_with_group, Beat %in% top_beats$Beat)
+ggplot(top_crime_count_with_group, aes(reorder(Beat, -n), n, fill=BlockRange, order=BlockRange)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per beat")
 
 #number of crimes per Address (block range, streetname, type, suffix) - all count 1
 info.df <- tbl_df(info)
@@ -51,6 +57,7 @@ count <- arrange(tally(by_street), desc(n))
 head(count)
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(StreetName,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per StreetName")
-
 #number of crimes per hour and type
 ggplot(info, aes(x=Hour, color=Offense.Type)) + geom_histogram(binwidth = 1) + ggtitle("Distribution of crimes per hour and type")
+
+
