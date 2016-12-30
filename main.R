@@ -5,6 +5,8 @@ library(reshape2)
 library(tidyr)
 library(lubridate)
 library(DMwR)
+library(nnet)
+
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 
@@ -21,16 +23,39 @@ info$Suffix[info$Suffix == '-'] <- NA
 info$Beat <- as.character(info$Beat)
 
 # Creates the new table with the proper Weekdays
+# dataset_prep <- function(x) {
+#   x$Date <- ifelse(as.integer(x$Hour) < 8, as.character(as.Date(x$Date) - 1), as.character(x$Date))
+#   x$DayInterval <- 0
+#   x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
+#   x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
+#   x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
+#   
+#   result <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
+#                        DayInterval = x$DayInterval,
+#                        Beat = x$Beat,
+#                        Offenses = x$X..offenses,
+#                        stringsAsFactors = FALSE)
+#   
+#   
+#   
+#   return(result)
+# }
+
 dataset_prep <- function(x) {
   x$Date <- ifelse(as.integer(x$Hour) < 8, as.character(as.Date(x$Date) - 1), as.character(x$Date))
-  x$DateInterval <- 0
-  x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DateInterval <- 3
-  x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DateInterval <- 2
-  x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DateInterval <- 1
+  x$DayInterval <- 0
+  x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
+  x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
+  x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
+
   
   result <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
-                       DateInterval = x$DateInterval,
+                       DayInterval = x$DayInterval,
                        Beat = x$Beat,
+                       Offenses = x$X..offenses,
+                       Day = day(x$Date),
+                       Month = month(x$Date),
+                       Year = year(x$Date),
                        stringsAsFactors = FALSE)
   
   
@@ -38,8 +63,16 @@ dataset_prep <- function(x) {
   return(result)
 }
 
-
 preprocessed <- dataset_prep(info)
+preprocessed.group <- group_by(preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
+
+idx.tr <- sample(1:nrow(preprocessed.group),as.integer(0.7*nrow(preprocessed.group)))
+train <- preprocessed.group[idx.tr,]
+test <- preprocessed.group[-idx.tr,]
+
+nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
+nn$xlevels[["Beat"]] <- union(nn$xlevels[["Beat"]], levels(test$Beat))
+(mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
 
 #number of crimes per beat with the types of crimes
 info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
