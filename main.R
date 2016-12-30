@@ -5,8 +5,12 @@ library(reshape2)
 library(tidyr)
 library(lubridate)
 library(DMwR)
+<<<<<<< HEAD
 library(nnet)
 
+=======
+library(rpart.plot)
+>>>>>>> c183283d75bc6e23fc7a5a2dfbcef60984d142a2
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 
@@ -47,15 +51,21 @@ dataset_prep <- function(x) {
   x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
   x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
   x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
+<<<<<<< HEAD
 
+=======
+>>>>>>> c183283d75bc6e23fc7a5a2dfbcef60984d142a2
   
   result <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
                        DayInterval = x$DayInterval,
                        Beat = x$Beat,
                        Offenses = x$X..offenses,
+<<<<<<< HEAD
                        Day = day(x$Date),
                        Month = month(x$Date),
                        Year = year(x$Date),
+=======
+>>>>>>> c183283d75bc6e23fc7a5a2dfbcef60984d142a2
                        stringsAsFactors = FALSE)
   
   
@@ -64,6 +74,7 @@ dataset_prep <- function(x) {
 }
 
 preprocessed <- dataset_prep(info)
+<<<<<<< HEAD
 preprocessed.group <- group_by(preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
 
 idx.tr <- sample(1:nrow(preprocessed.group),as.integer(0.7*nrow(preprocessed.group)))
@@ -73,6 +84,9 @@ test <- preprocessed.group[-idx.tr,]
 nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
 nn$xlevels[["Beat"]] <- union(nn$xlevels[["Beat"]], levels(test$Beat))
 (mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
+=======
+preprocessed.group <- group_by(preprocessed, WeekDay, DayInterval, Beat) %>% summarize(Offenses = sum(Offenses))
+>>>>>>> c183283d75bc6e23fc7a5a2dfbcef60984d142a2
 
 #number of crimes per beat with the types of crimes
 info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
@@ -125,3 +139,16 @@ ggplot(head(count), aes(x=reorder(StreetName,-n), y=n)) + geom_bar(stat="identit
 ggplot(info, aes(x=Hour, color=Offense.Type)) + geom_histogram(binwidth = 1) + ggtitle("Distribution of crimes per hour and type")
 
 
+#Regression Trees
+sp <- sample(1:nrow(preprocessed.group), as.integer(nrow(preprocessed.group)*0.80))
+tr <- preprocessed.group[sp,]
+ts <- preprocessed.group[-sp,]
+ac <- rpartXse(Offenses ~ ., tr)
+ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
+ps <- predict(ac, ts, type="vector")
+mae <- mean(abs(ps-ts$Offenses))
+mae
+cr <- cor(ps, ts$Offenses)
+cr
+prp(ac, type=1, extra=101)
+#media erro 1.89
