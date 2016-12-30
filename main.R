@@ -5,12 +5,9 @@ library(reshape2)
 library(tidyr)
 library(lubridate)
 library(DMwR)
-<<<<<<< HEAD
 library(nnet)
-
-=======
 library(rpart.plot)
->>>>>>> c183283d75bc6e23fc7a5a2dfbcef60984d142a2
+
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 
@@ -51,30 +48,19 @@ dataset_prep <- function(x) {
   x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
   x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
   x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
-<<<<<<< HEAD
 
-=======
->>>>>>> c183283d75bc6e23fc7a5a2dfbcef60984d142a2
-  
   result <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
                        DayInterval = x$DayInterval,
                        Beat = x$Beat,
                        Offenses = x$X..offenses,
-<<<<<<< HEAD
                        Day = day(x$Date),
                        Month = month(x$Date),
                        Year = year(x$Date),
-=======
->>>>>>> c183283d75bc6e23fc7a5a2dfbcef60984d142a2
                        stringsAsFactors = FALSE)
-  
-  
-  
   return(result)
 }
 
 preprocessed <- dataset_prep(info)
-<<<<<<< HEAD
 preprocessed.group <- group_by(preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
 
 idx.tr <- sample(1:nrow(preprocessed.group),as.integer(0.7*nrow(preprocessed.group)))
@@ -84,9 +70,46 @@ test <- preprocessed.group[-idx.tr,]
 nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
 nn$xlevels[["Beat"]] <- union(nn$xlevels[["Beat"]], levels(test$Beat))
 (mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
-=======
-preprocessed.group <- group_by(preprocessed, WeekDay, DayInterval, Beat) %>% summarize(Offenses = sum(Offenses))
->>>>>>> c183283d75bc6e23fc7a5a2dfbcef60984d142a2
+
+get_all_perms <- function(x) {
+  dayintervals <- 1:3   
+  beats <- unique(x$Beat)
+  all_perms <- expand.grid(DayInterval = dayintervals, Beat = beats)
+  return(all_perms)
+}
+
+get_days_between <- function(info) {
+  firstdate <- info$Date[order(format(as.Date(info$Date)))[1]]
+  lastdate <- info$Date[tail(order(format(as.Date(info$Date))), n=1)] 
+  days.between <- seq(as.Date(firstdate), as.Date(lastdate), by="days")
+  
+  return(days.between)
+}
+
+get_all_days <- function(info) {
+  days.between <- get_days_between(info)
+  all_days.df <- data.frame(Day = day(days.between),
+                            Month = month(days.between),
+                            Year = year(days.between))
+  return(all_days.df)
+}
+
+preprocessed <- dataset_prep(info)
+all_perms <- get_all_perms(preprocessed)
+all_days <- get_all_days(info)
+
+days.between <- get_days_between(info)
+all_perms_unique_beat <- unique(all_perms$Beat)
+all_perms_unique_day_interval <- unique(all_perms$DayInterval)
+all_beats_perm <- data.frame(Date = rep(days.between, times=length(all_perms_unique_beat) * length(all_perms_unique_day_interval)),
+                             DayInterval = rep(all_perms_unique_day_interval, times=length(all_perms_unique_beat) * length(days.between)),
+                             Beat = rep(all_perms_unique_beat, times=length(all_perms_unique_day_interval) * length(days.between)))
+all_beats_perm$Offenses <- 0
+all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
+all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
+all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
+all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
+
 
 #number of crimes per beat with the types of crimes
 info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
