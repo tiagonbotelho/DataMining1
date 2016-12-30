@@ -23,14 +23,15 @@ info$Beat <- as.character(info$Beat)
 # Creates the new table with the proper Weekdays
 dataset_prep <- function(x) {
   x$Date <- ifelse(as.integer(x$Hour) < 8, as.character(as.Date(x$Date) - 1), as.character(x$Date))
-  x$DateInterval <- 0
-  x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DateInterval <- 3
-  x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DateInterval <- 2
-  x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DateInterval <- 1
+  x$DayInterval <- 0
+  x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
+  x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
+  x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
   
   result <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
-                       DateInterval = x$DateInterval,
+                       DayInterval = x$DayInterval,
                        Beat = x$Beat,
+                       Offenses = x$X..offenses,
                        stringsAsFactors = FALSE)
   
   
@@ -40,6 +41,7 @@ dataset_prep <- function(x) {
 
 
 preprocessed <- dataset_prep(info)
+preprocessed.group <- group_by(preprocessed, WeekDay, DayInterval, Beat) %>% summarize(Offenses = sum(Offenses))
 
 #number of crimes per beat with the types of crimes
 info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
