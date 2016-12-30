@@ -5,6 +5,7 @@ library(reshape2)
 library(tidyr)
 library(lubridate)
 library(DMwR)
+library(rpart.plot)
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 
@@ -101,3 +102,16 @@ ggplot(head(count), aes(x=reorder(StreetName,-n), y=n)) + geom_bar(stat="identit
 ggplot(info, aes(x=Hour, color=Offense.Type)) + geom_histogram(binwidth = 1) + ggtitle("Distribution of crimes per hour and type")
 
 
+#Regression Trees
+sp <- sample(1:nrow(preprocessed.group), as.integer(nrow(preprocessed.group)*0.80))
+tr <- preprocessed.group[sp,]
+ts <- preprocessed.group[-sp,]
+ac <- rpartXse(Offenses ~ ., tr)
+ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
+ps <- predict(ac, ts, type="vector")
+mae <- mean(abs(ps-ts$Offenses))
+mae
+cr <- cor(ps, ts$Offenses)
+cr
+prp(ac, type=1, extra=101)
+#media erro 1.89
