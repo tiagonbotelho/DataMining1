@@ -38,8 +38,15 @@ dataset_prep <- function(x) {
   return(result)
 }
 
-
+get_all_perms <- function(x) {
+  weekdays <- 1:7
+  dayintervals <- 1:3   
+  beats <- unique(x$Beat)
+  all_perms <- expand.grid(WeekDay = weekdays, DayInterval = dayintervals, Beat = beats)   
+  return(all_perms)
+}
 preprocessed <- dataset_prep(info)
+all_perms <- get_all_perms(preprocessed)
 
 #number of crimes per beat with the types of crimes
 info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
