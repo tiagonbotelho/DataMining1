@@ -3,6 +3,7 @@ library(ggplot2)
 library(dplyr)
 library(reshape2)
 library(tidyr)
+library(lubridate)
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 info$BlockRange[info$BlockRange=='UNK'] <- NA
@@ -28,6 +29,11 @@ dataset_prep <- function(x) {
 
 preprocessed <- dataset_prep(info)
 
+
+# Removes outliers by unix time days
+dates <- info$Date
+n_days <- day(days(ymd(date)))
+info <- info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) & n_days <= quantile(n_days, .75) + 1.5*IQR(n_days), ]
 
 #number of crimes per beat with the types of crimes
 info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)

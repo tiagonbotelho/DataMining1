@@ -2,8 +2,9 @@
 title: "Report"
 author: "Pedro Belém, Rui Fonseca, Tiago Botelho"
 date: "December 23, 2016"
-output: 
-  pdf_document: 
+output:
+  html_document: default
+  pdf_document:
     fig_height: 6
 ---
 
@@ -33,6 +34,14 @@ and the block range variable is modified. Since it is always a string like "X-Y"
 ```{r}
 split <- strsplit(as.character(info$BlockRange), "-")
 info$BlockRange <- order(sapply(split, "[", 1))
+```
+
+We remove the entries with outlier dates. We calculate the outlier dates with the number days since the beginning of unix time.
+```{r}
+dates <- info$Date
+n_days <- day(days(ymd(date)))
+info <- info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) &
+             n_days <= quantile(n_days, .75) + 1.5*IQR(n_days), ]
 ```
 
 ## Including Plots
