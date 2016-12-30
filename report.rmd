@@ -15,6 +15,10 @@ library(ggplot2)
 library(dplyr)
 library(reshape2)
 library(tidyr)
+library(lubridate)
+library(DMwR)
+library(rpart.plot)
+library(MASS)
 ```
 
 ## Data Pre processing
@@ -23,6 +27,13 @@ The data is read from the crime.xls file into a data frame
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 ```
+We remove outliers by unix time days
+```{r}
+dates <- info$Date
+n_days <- day(days(ymd(dates)))
+info <- info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) & n_days <= quantile(n_days, .75) + 1.5*IQR(n_days), ]
+```
+
 Then, the unknown values (NA) are treated
 ```{r}
 info$BlockRange[info$BlockRange=='UNK'] <- NA
@@ -36,15 +47,7 @@ split <- strsplit(as.character(info$BlockRange), "-")
 info$BlockRange <- order(sapply(split, "[", 1))
 ```
 
-We remove the entries with outlier dates. We calculate the outlier dates with the number days since the beginning of unix time.
-```{r}
-dates <- info$Date
-n_days <- day(days(ymd(date)))
-info <- info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) &
-             n_days <= quantile(n_days, .75) + 1.5*IQR(n_days), ]
-```
-
-## Including Plots
+## Data Visualisation
 
 You can also embed plots, for example:
 
@@ -71,4 +74,21 @@ count <- arrange(tally(by_street), desc(n))
 ggplot(head(count), aes(x=reorder(StreetName,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per StreetName")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r echo = FALSE}
+#number of crimes per beat with the types of crimes
+info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
+by_beat_with_group <- group_by(info.df, Beat, BlockRange)
+by_beat <- group_by(info.df, Beat)
+crime_count_with_group <- arrange(tally(by_beat_with_group), desc=-n)
+crime_count <- arrange(tally(by_beat), desc=-n)
+# we only want the top ones
+top_beats <- head(crime_count)
+top_crime_count_with_group <- crime_count_with_group[crime_count_with_group$Beat %in% top_beats$Beat,]
+top_crime_count_with_group <- subset(crime_count_with_group, Beat %in% top_beats$Beat)
+ggplot(top_crime_count_with_group, aes(reorder(Beat, -n), n, fill=BlockRange, order=BlockRange)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per beat")
+```
+
+##Data Prediction
+The question that we're going to answer is: since we know all these crimes that happen, how many offenses will occur, in a given day interval of a day, in a certain police beat. First, we slit the hours of a day into three diferent intervals. The first one is the mourning, starts at 8h(inclusive) until 12h(exclusive). The second one is in the afternoon, starts at 12h (inclusive) until 19h (exclusive). The third interval (night) starts at 19h(exclusive) and ends at 8h (exclusive) of the next day (e.g. if a crime happened at 4h of day 20, it will correspond to the night period of the day 19).

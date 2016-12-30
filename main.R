@@ -7,7 +7,11 @@ library(lubridate)
 library(DMwR)
 library(nnet)
 library(rpart.plot)
+<<<<<<< HEAD
 
+=======
+library(MASS)
+>>>>>>> 4b19e1451422f7e9fed5a0d211ce957f3c209f51
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 
@@ -119,7 +123,7 @@ crime_count_with_group <- arrange(tally(by_beat_with_group), desc=-n)
 crime_count <- arrange(tally(by_beat), desc=-n)
 # we only want the top ones
 top_beats <- head(crime_count)
-top_crime_count_with_group <- crime_count_with_group[crime_count_with_group$Beat %in% top_beats$Beat]
+top_crime_count_with_group <- crime_count_with_group[crime_count_with_group$Beat %in% top_beats$Beat,]
 top_crime_count_with_group <- subset(crime_count_with_group, Beat %in% top_beats$Beat)
 ggplot(top_crime_count_with_group, aes(reorder(Beat, -n), n, fill=BlockRange, order=BlockRange)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per beat")
 
@@ -169,9 +173,24 @@ ts <- preprocessed.group[-sp,]
 ac <- rpartXse(Offenses ~ ., tr)
 ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
 ps <- predict(ac, ts, type="vector")
-mae <- mean(abs(ps-ts$Offenses))
-mae
+#eoot mean squared error = 2.50
+mse = sqrt(mean((ts$Offenses-ps)^2))
+#mean absolute error = 1.89
+mae <- mean(abs(ps - ts$Offenses))
+#correlation between the predictions and the true values = 0.70
 cr <- cor(ps, ts$Offenses)
-cr
+#mean average percentage error = 0.63
+mape <- mean(abs(ts$Offenses-ps)/ts$Offenses)
 prp(ac, type=1, extra=101)
-#media erro 1.89
+
+#Linear Discriminant Analysis (LDA)
+sp <- sample(1:nrow(preprocessed.group), as.integer(nrow(preprocessed.group)*0.99))
+tr <- preprocessed.group[sp,]
+ts <- preprocessed.group[-sp,]
+ac <- lda(Offenses ~ ., tr)
+ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
+ps <- predict(ac, ts)
+
+#Multiple Linear Regression
+linearRegression <- lm(Offenses ~ ., preprocessed.group)
+summary(linearRegression)
