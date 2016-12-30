@@ -4,17 +4,25 @@ library(dplyr)
 library(reshape2)
 library(tidyr)
 library(lubridate)
+library(DMwR)
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
+
+# Removes outliers by unix time days
+dates <- info$Date
+n_days <- day(days(ymd(dates)))
+info <- info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) & n_days <= quantile(n_days, .75) + 1.5*IQR(n_days), ]
+
+info$Beat[info$Beat == 'UNK'] <- NA
+info <- knnImputation(info, k=3)
 info$BlockRange[info$BlockRange=='UNK'] <- NA
 info$Type[info$Type == '-'] <- NA
 info$Suffix[info$Suffix == '-'] <- NA
-info$Beat[info$Beat == 'UNK'] <- NA
 info$Beat <- as.character(info$Beat)
 
 # Creates the new table with the proper Weekdays
 dataset_prep <- function(x) {
-  x[as.integer(x$Hour) < 8, ]$Date <- as.character(as.Date(x[as.integer(x$Hour) < 8, ]$Date) - 1)
+  x$Date <- ifelse(as.integer(x$Hour) < 8, as.character(as.Date(x$Date) - 1), as.character(x$Date))
   x$DateInterval <- 0
   x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DateInterval <- 3
   x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DateInterval <- 2
@@ -24,16 +32,14 @@ dataset_prep <- function(x) {
                        DateInterval = x$DateInterval,
                        Beat = x$Beat,
                        stringsAsFactors = FALSE)
+  
+  
+  
   return(result)
 }
 
+
 preprocessed <- dataset_prep(info)
-
-
-# Removes outliers by unix time days
-dates <- info$Date
-n_days <- day(days(ymd(date)))
-info <- info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) & n_days <= quantile(n_days, .75) + 1.5*IQR(n_days), ]
 
 #number of crimes per beat with the types of crimes
 info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
