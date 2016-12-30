@@ -5,10 +5,29 @@ library(reshape2)
 library(tidyr)
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
-info
 info$BlockRange[info$BlockRange=='UNK'] <- NA
 info$Type[info$Type == '-'] <- NA
 info$Suffix[info$Suffix == '-'] <- NA
+info$Beat[info$Beat == 'UNK'] <- NA
+info$Beat <- as.character(info$Beat)
+
+# Creates the new table with the proper Weekdays
+dataset_prep <- function(x) {
+  x[as.integer(x$Hour) < 8, ]$Date <- as.character(as.Date(x[as.integer(x$Hour) < 8, ]$Date) - 1)
+  x$DateInterval <- 0
+  x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DateInterval <- 3
+  x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DateInterval <- 2
+  x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DateInterval <- 1
+  
+  result <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
+                       DateInterval = x$DateInterval,
+                       Beat = x$Beat,
+                       stringsAsFactors = FALSE)
+  return(result)
+}
+
+preprocessed <- dataset_prep(info)
+
 
 #number of crimes per beat with the types of crimes
 info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
