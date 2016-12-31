@@ -106,12 +106,17 @@ info.preprocessed.onlyweek.group <- group_by(info.preprocessed.onlyweek, WeekDay
 info.preprocessed.onlyweek.total_perm <- create_total_perm(info.preprocessed, only.week = TRUE)
 
 ######## Neural Network ##########
-training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.7*nrow(info.preprocessed.joined)))
+training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.95*nrow(info.preprocessed.joined)))
 train <- info.preprocessed.joined[training_index,]
 test <- info.preprocessed.joined[-training_index,]
 
-nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
-(mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
+max.offenses <- max(info.preprocessed.joined$Offenses)
+nn <- nnet(Offenses / max.offenses ~ ., data = train, size=5, decay=0.05, maxit=1000)
+pred <- predict(nn, test) * max.offenses
+MSE <- mean((pred - test$Offenses)^2)
+perc <- mean(abs(test$Offenses - pred)/test$Offenses)
+  
+  
 ######## Neural Network ##########
 
 
