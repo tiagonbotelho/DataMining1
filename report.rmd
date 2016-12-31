@@ -19,13 +19,14 @@ library(lubridate)
 library(DMwR)
 library(rpart.plot)
 library(MASS)
+load("./data.RData")
 ```
 
 
 
 ## Data Pre processing
 We begin by reading the data from the crime.xls file into a data frame
-```{r}
+```{r eval = FALSE}
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 ```
@@ -85,7 +86,13 @@ get_days_between <- function(info) {
 
 ## Data Visualisation
 
-```{r echo=FALSE}
+The following map is from the houston police department. As we can see, each police beat is linked to a specific area of the city
+
+![Houston police beat map](./beat_map.png)
+
+![Map legend](./beat_map_legend.png)
+
+```{r echo=FALSE, eval=FALSE}
 #this is the variable initialization
 info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
 split <- strsplit(as.character(info$BlockRange), "-")
@@ -116,6 +123,9 @@ top_beat_crimes <- filter(info.df,info.df$Beat %in% top_beats$Beat)
 ggplot(top_beat_crimes, aes(x = Beat, fill=BlockRange)) + geom_bar(stat="count") + ggtitle("Distribution of crimes per beat")
 
 ```
+The graph shows the six beats with more crime count. Each beat has continuous block ranges, which makes sense since the block ranges are numbered continuously.
+
+
 
 ```{r echo=FALSE}
 #number of crimes per Address (block range, streetname, type, suffix)
@@ -130,6 +140,7 @@ count$d <- gsub("NA ","",count$d)
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(d,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per Address")
 ```
+The address with more crime count is 2300 WAYSIDE S
 
 ```{r echo=FALSE}
 #number of crimes per street name, Type and Suffix
@@ -143,6 +154,8 @@ count$d <- gsub(" NA","",count$d)
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(d,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per Address except BlockRange")
 ```
+Ignoring the block range in the adress, the adress with more offenses is WESTHEIMER RD
+
 
 ```{r echo=FALSE}
 #number of crimes per street name
@@ -179,7 +192,33 @@ The first direction that we took to answer the problem was to create a new data 
 * DayInterval: the interval of the day in which the crime happened
 * Offenses: The total number of offenses
 
+We will use this data to construct a model that predicts the Offenses number. We train the model with 70 percent of the data and test with the remaining 30 percent.
 
+Using a Regression Tree Model
+
+
+```{r echo=FALSE}
+######## Regression Trees ##########
+info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
+sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.99))
+tr <- info.preprocessed.group[sp,]
+ts <- info.preprocessed.group[-sp,]
+ac <- rpartXse(Offenses ~ ., tr)
+ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
+ps <- predict(ac, ts, type="vector")
+#root mean squared error = 2.50
+mse = sqrt(mean((ts$Offenses-ps)^2))
+#mean absolute error = 0.79
+mae <- mean(abs(ps - ts$Offenses))
+#correlation between the predictions and the true values = 0.31
+cr <- cor(ps, ts$Offenses)
+#mean average percentage error = 0.50
+mape <- mean(abs(ts$Offenses-ps)/ts$Offenses)
+prp(ac, type=1, extra=101)
+######## Regression Trees ##########
+```
+
+We get 
 
 -----------------------------------
 
