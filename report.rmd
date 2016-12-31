@@ -135,7 +135,8 @@ count$d <- gsub("NA ","",count$d)
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(d,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per Address")
 ```
-The address with more crime count is 2300 WAYSIDE S
+We define the base address of a crime as the combination of BlockRange, Streetname, Type and Suffix.
+The address with more crime count is 2300 WAYSIDE S.
 
 ```{r echo=FALSE}
 #number of crimes per street name, Type and Suffix
@@ -149,7 +150,7 @@ count$d <- gsub(" NA","",count$d)
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(d,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per Address except BlockRange")
 ```
-Ignoring the block range in the adress, the adress with more offenses is WESTHEIMER RD
+Ignoring the block range in the adress, the adress with more offenses is WESTHEIMER RD.
 
 
 ```{r echo=FALSE}
@@ -160,24 +161,30 @@ count <- arrange(tally(by_street), desc(n))
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(StreetName,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per StreetName")
 ```
-
+The streetname with more offenses is Westhimer.
 
 ```{r echo = FALSE}
 #number of crimes per hour and type
 ggplot(info, aes(x=Hour, color=Offense.Type)) + geom_histogram(binwidth = 1) + ggtitle("Distribution of crimes per hour and type")
 
 ```
+We can see that the crimes are most likely to happen during the afternoon.
+
+
+
 
 ```{r echo=FALSE}
 #number of crimes per hour and type
 ggplot(info, aes(x=Hour)) + geom_histogram(binwidth = 1) + facet_wrap(~ Offense.Type) + ggtitle("Distribution of crimes per hour and type")
 
 ```
+Here we can analyse the hours for each crime type. Theft is the most likely crime, with it's peak at hour 15.
 
 ```{r echo=FALSE}
 offenses_by_weekday <- group_by(info.preprocessed, WeekDay) %>% summarise(Offenses = sum(Offenses))
 ggplot(offenses_by_weekday, aes(x=WeekDay, y=Offenses)) + geom_bar(stat="identity")
 ```
+The day of the week with more offenses is day 5.
 
 ##Data Prediction
 
