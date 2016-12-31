@@ -19,19 +19,20 @@ library(lubridate)
 library(DMwR)
 library(rpart.plot)
 library(MASS)
+load("./data.RData")
 ```
 
 
 
 ## Data Pre processing
 We begin by reading the data from the crime.xls file into a data frame
-```{r}
+```{r eval = FALSE}
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 ```
 
 Then we removed all the instances with outlier dates. To calculate the outliers we considered a date as the number of days since the beginning of unix time.
-```{r}
+```{r eval = FALSE}
 remove_outliers <- function(info) {
   n_days <- day(days(ymd(info$Date)))
   return(info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) & n_days <= quantile(n_days, .75) + 1.5*IQR(n_days),])
@@ -39,7 +40,7 @@ remove_outliers <- function(info) {
 ```
 
 Then, we convert all the missing values to NA.
-```{r}
+```{r eval = FALSE}
 na_handler <- function(info) {
   info$Beat[info$Beat == 'UNK'] <- NA
   info <- knnImputation(info, k=3)
@@ -74,7 +75,7 @@ We create new collumns to better explain the data:
 * Day: the day of the month in which the crime happened
 
 
-```{r echo = FALSE}
+```{r echo = FALSE, eval = FALSE}
 get_days_between <- function(info) {
   firstdate <- info$Date[order(format(as.Date(info$Date)))[1]]
   lastdate <- info$Date[tail(order(format(as.Date(info$Date))), n=1)] 
@@ -85,7 +86,7 @@ get_days_between <- function(info) {
 
 ## Data Visualisation
 
-```{r echo=FALSE}
+```{r echo=FALSE, eval=FALSE}
 #this is the variable initialization
 info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
 split <- strsplit(as.character(info$BlockRange), "-")
