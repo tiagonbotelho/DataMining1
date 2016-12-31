@@ -104,16 +104,19 @@ info.preprocessed.joined <- info.preprocessed.joined[,!colnames(info.preprocesse
 
 
 
+
+
 ######## Neural Network ##########
-training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.95*nrow(info.preprocessed.joined)))
+training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.70*nrow(info.preprocessed.joined)))
 train <- info.preprocessed.joined[training_index,]
 test <- info.preprocessed.joined[-training_index,]
 
 max.offenses <- max(info.preprocessed.joined$Offenses)
 nn <- nnet(Offenses / max.offenses ~ ., data = train, size=5, decay=0.05, maxit=1000)
 pred <- predict(nn, test) * max.offenses
-MSE <- mean((pred - test$Offenses)^2)
-perc <- mean(abs(test$Offenses - pred)/test$Offenses)
+mse <- mean((pred - test$Offenses)^2)
+rmse = sqrt(mean((test$Offenses-pred)^2))
+cr <- cor(pred, test$Offenses)
 ######## Neural Network ##########
 
 info.preprocessed.onlyweek <- dataset_prep(info, only.week = TRUE)
@@ -129,7 +132,6 @@ sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.pre
 tr <- info.preprocessed.onlyweek.joined[sp,]
 ts <- info.preprocessed.onlyweek.joined[-sp,]
 ac <- rpartXse(Offenses ~ ., tr)
-ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
 ps <- predict(ac, ts, type="vector")
 #root mean squared error = 0.29
 mse = sqrt(mean((ts$Offenses-ps)^2))
@@ -138,11 +140,36 @@ mae <- mean(abs(ps - ts$Offenses))
 #correlation between the predictions and the true values = 0.60
 cr <- cor(ps, ts$Offenses)
 prp(ac, type=1, extra=101)
-######## Regression Trees ##########
 
+
+training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.70*nrow(info.preprocessed.joined)))
+train <- info.preprocessed.joined[training_index,]
+test <- info.preprocessed.joined[-training_index,]
+ac <- rpartXse(Offenses ~ ., train)
+ps <- predict(ac, test, type="vector")
+#root mean squared error = 0.29
+mse = sqrt(mean((test$Offenses-ps)^2))
+#mean absolute error = 1.89
+mae <- mean(abs(ps - test$Offenses))
+#correlation between the predictions and the true values = 0.60
+cr <- cor(ps, test$Offenses)
+prp(ac, type=1, extra=101)
+######## Regression Trees ##########
 
 ######## Linear Discriminant Analysis ##########
 sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.99))
+tr <- info.preprocessed.onlyweek.joined[sp,]
+ts <- info.preprocessed.onlyweek.joined[-sp,]
+ac <- lda(Offenses ~ ., tr)
+ps <- predict(ac, ts)
+#root mean squared error = N.a.N.
+mse = sqrt(mean((ts$Offenses-as.numeric(levels(ps$class)[ps$class])^2)))
+#mean absolute error = 0.248
+mae <- mean(abs(as.numeric(levels(ps$class)[ps$class]) - ts$Offenses))
+#correlation between the predictions and the true values = 0.42
+cr <- cor(as.numeric(levels(ps$class)[ps$class]), ts$Offenses)
+
+sp <- sample(1:nrow(info.preprocessed.joined), as.integer(nrow(info.preprocessed.joined)*0.70))
 tr <- info.preprocessed.onlyweek.joined[sp,]
 ts <- info.preprocessed.onlyweek.joined[-sp,]
 ac <- lda(Offenses ~ ., tr)
