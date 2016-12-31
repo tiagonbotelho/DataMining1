@@ -282,6 +282,9 @@ We get:
 
 -----------------------------------
 
+We soon realised that this model was inaccurate because we can only predict the average number of offenses of a weekday. This model would only be useful if we didn`t have data for a certain weekday.
+
+We had to add the date to our data model so we could predict the number of offenses for a date.
 
 So our final data model for this problem consists of
 
