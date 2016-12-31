@@ -7,112 +7,89 @@ library(lubridate)
 library(DMwR)
 library(nnet)
 library(rpart.plot)
-<<<<<<< HEAD
-
-=======
 library(MASS)
->>>>>>> 4b19e1451422f7e9fed5a0d211ce957f3c209f51
 data_path <- "./crime.xls"
-info <- read.xls(data_path, sheet=1)
 
-# Removes outliers by unix time days
-dates <- info$Date
-n_days <- day(days(ymd(dates)))
-info <- info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) & n_days <= quantile(n_days, .75) + 1.5*IQR(n_days), ]
+remove_outliers <- function(info) {
+  n_days <- day(days(ymd(info$Date)))
+  return(info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) & n_days <= quantile(n_days, .75) + 1.5*IQR(n_days),])
+}
 
-info$Beat[info$Beat == 'UNK'] <- NA
-info <- knnImputation(info, k=3)
-info$BlockRange[info$BlockRange=='UNK'] <- NA
-info$Type[info$Type == '-'] <- NA
-info$Suffix[info$Suffix == '-'] <- NA
-info$Beat <- as.character(info$Beat)
-
-# Creates the new table with the proper Weekdays
-# dataset_prep <- function(x) {
-#   x$Date <- ifelse(as.integer(x$Hour) < 8, as.character(as.Date(x$Date) - 1), as.character(x$Date))
-#   x$DayInterval <- 0
-#   x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
-#   x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
-#   x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
-#   
-#   result <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
-#                        DayInterval = x$DayInterval,
-#                        Beat = x$Beat,
-#                        Offenses = x$X..offenses,
-#                        stringsAsFactors = FALSE)
-#   
-#   
-#   
-#   return(result)
-# }
+na_handler <- function(info) {
+  info$Beat[info$Beat == 'UNK'] <- NA
+  info <- knnImputation(info, k=3)
+  info$BlockRange[info$BlockRange=='UNK'] <- NA
+  info$Type[info$Type == '-'] <- NA
+  info$Suffix[info$Suffix == '-'] <- NA
+  info$Beat <- as.character(info$Beat)
+  
+  return(info)
+}
 
 dataset_prep <- function(x) {
   x$Date <- ifelse(as.integer(x$Hour) < 8, as.character(as.Date(x$Date) - 1), as.character(x$Date))
+  
+  # Split info in time intervals
   x$DayInterval <- 0
   x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
   x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
   x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
 
-  result <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
-                       DayInterval = x$DayInterval,
-                       Beat = x$Beat,
-                       Offenses = x$X..offenses,
-                       Day = day(x$Date),
-                       Month = month(x$Date),
-                       Year = year(x$Date),
-                       stringsAsFactors = FALSE)
-  return(result)
+  return(data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
+                    DayInterval = x$DayInterval,
+                    Beat = x$Beat,
+                    Offenses = x$X..offenses,
+                    Day = day(x$Date),
+                    Month = month(x$Date),
+                    Year = year(x$Date),
+                    stringsAsFactors = FALSE))
 }
 
-preprocessed <- dataset_prep(info)
-preprocessed.group <- group_by(preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
-
-idx.tr <- sample(1:nrow(preprocessed.group),as.integer(0.7*nrow(preprocessed.group)))
-train <- preprocessed.group[idx.tr,]
-test <- preprocessed.group[-idx.tr,]
-
-nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
-nn$xlevels[["Beat"]] <- union(nn$xlevels[["Beat"]], levels(test$Beat))
-(mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
-
-get_all_perms <- function(x) {
-  dayintervals <- 1:3   
-  beats <- unique(x$Beat)
-  all_perms <- expand.grid(DayInterval = dayintervals, Beat = beats)
-  return(all_perms)
-}
+interval_beat_perms <- function(x) { return(expand.grid(DayInterval = unique(x$DayInterval), Beat = unique(x$Beat))) }
 
 get_days_between <- function(info) {
   firstdate <- info$Date[order(format(as.Date(info$Date)))[1]]
   lastdate <- info$Date[tail(order(format(as.Date(info$Date))), n=1)] 
-  days.between <- seq(as.Date(firstdate), as.Date(lastdate), by="days")
   
-  return(days.between)
+  return(seq(as.Date(firstdate), as.Date(lastdate), by="days"))
 }
 
-get_all_days <- function(info) {
+create_total_perm <- function(preprocessed) {
   days.between <- get_days_between(info)
-  all_days.df <- data.frame(Day = day(days.between),
-                            Month = month(days.between),
-                            Year = year(days.between))
-  return(all_days.df)
+  unique_beats <- unique(preprocessed$Beat)
+  unique_day_intervals <- unique(preprocessed$DayInterval)
+  
+  all_beats_perm <- data.frame(Date = rep(days.between, times=length(unique_beats) * length(unique_day_intervals)),
+                               DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
+                               Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
+                               Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
+  
+  all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
+  all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
+  all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
+  all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
+  
+  return(all_beats_perm)
 }
 
-preprocessed <- dataset_prep(info)
-all_perms <- get_all_perms(preprocessed)
-all_days <- get_all_days(info)
+info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
+info.preprocessed <- dataset_prep(info)
+info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
+info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
 
-days.between <- get_days_between(info)
-all_perms_unique_beat <- unique(all_perms$Beat)
-all_perms_unique_day_interval <- unique(all_perms$DayInterval)
-all_beats_perm <- data.frame(Date = rep(days.between, times=length(all_perms_unique_beat) * length(all_perms_unique_day_interval)),
-                             DayInterval = rep(all_perms_unique_day_interval, times=length(all_perms_unique_beat) * length(days.between)),
-                             Beat = rep(all_perms_unique_beat, times=length(all_perms_unique_day_interval) * length(days.between)))
-all_beats_perm$Offenses <- 0
-all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
-all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
-all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
-all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
+######## Neural Network ##########
+training_index <- sample(1:nrow(info.preprocessed.group),as.integer(0.7*nrow(info.preprocessed.group)))
+train <- info.preprocessed.group[training_index,]
+test <- info.preprocessed.group[-training_index,]
+
+nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
+(mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
+######## Neural Network ##########
+
+
+get_total_dataset <- function(info) {
+  all_perms <- dataset_prep() %>% get_all_perms()
+}
 
 
 #number of crimes per beat with the types of crimes
@@ -167,13 +144,14 @@ ggplot(info, aes(x=Hour, color=Offense.Type)) + geom_histogram(binwidth = 1) + g
 
 
 #Regression Trees
-sp <- sample(1:nrow(preprocessed.group), as.integer(nrow(preprocessed.group)*0.80))
-tr <- preprocessed.group[sp,]
-ts <- preprocessed.group[-sp,]
+info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
+sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.80))
+tr <- info.preprocessed.group[sp,]
+ts <- info.preprocessed.group[-sp,]
 ac <- rpartXse(Offenses ~ ., tr)
 ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
 ps <- predict(ac, ts, type="vector")
-#eoot mean squared error = 2.50
+#root mean squared error = 2.50
 mse = sqrt(mean((ts$Offenses-ps)^2))
 #mean absolute error = 1.89
 mae <- mean(abs(ps - ts$Offenses))
@@ -184,13 +162,13 @@ mape <- mean(abs(ts$Offenses-ps)/ts$Offenses)
 prp(ac, type=1, extra=101)
 
 #Linear Discriminant Analysis (LDA)
-sp <- sample(1:nrow(preprocessed.group), as.integer(nrow(preprocessed.group)*0.99))
-tr <- preprocessed.group[sp,]
-ts <- preprocessed.group[-sp,]
+sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.99))
+tr <- info.preprocessed.group[sp,]
+ts <- info.preprocessed.group[-sp,]
 ac <- lda(Offenses ~ ., tr)
 ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
 ps <- predict(ac, ts)
 
 #Multiple Linear Regression
-linearRegression <- lm(Offenses ~ ., preprocessed.group)
+linearRegression <- lm(Offenses ~ ., info.preprocessed.group)
 summary(linearRegression)
