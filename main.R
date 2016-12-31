@@ -79,7 +79,6 @@ create_total_perm <- function(preprocessed, only.week = FALSE) {
                                  Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
                                  Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
     all_beats_perm$DayInterval <- as.integer(all_beats_perm$DayInterval)
-    all_beats_perm$Beat <- as.numeric(all_beats_perm$Beat)
     all_beats_perm$Offenses <- as.character(all_beats_perm$Offenses)
     all_beats_perm$WeekDay = as.integer(strftime(all_beats_perm$Date, "%u"))  
     all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
@@ -97,7 +96,11 @@ info$BlockRange <- sapply(split, "[", 1)
 info.preprocessed <- dataset_prep(info)
 info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
 info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
-info.preprocessed.joined <- merge(x=info.preprocessed.total_perm, y=info.preprocessed.group, all=TRUE)
+info.preprocessed.joined <- merge(info.preprocessed.group, info.preprocessed.total_perm, 
+                                  by=c("WeekDay", "DayInterval", "Beat", "Day", "Month", "Year"), all=TRUE)
+info.preprocessed.joined[is.na(info.preprocessed.joined$Offenses.x),]$Offenses.x <- 0
+info.preprocessed.joined$Offenses <- info.preprocessed.joined$Offenses.x
+info.preprocessed.joined <- info.preprocessed.joined[,!colnames(info.preprocessed.joined) %in% c("Offenses.y", "Offenses.x")]
 
 
 info.preprocessed.onlyweek <- dataset_prep(info, only.week = TRUE)
@@ -105,14 +108,13 @@ info.preprocessed.onlyweek.group <- group_by(info.preprocessed.onlyweek, WeekDay
 info.preprocessed.onlyweek.total_perm <- create_total_perm(info.preprocessed, only.week = TRUE)
 
 ######## Neural Network ##########
-training_index <- sample(1:nrow(info.preprocessed.group),as.integer(0.7*nrow(info.preprocessed.group)))
-train <- info.preprocessed.group[training_index,]
-test <- info.preprocessed.group[-training_index,]
+training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.7*nrow(info.preprocessed.joined)))
+train <- info.preprocessed.joined[training_index,]
+test <- info.preprocessed.joined[-training_index,]
 
 nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
-(mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
+mtrx <- table(predict(nn, test, class='integer', interval = c("none", "confidence", "prediction")), test$Offenses)
 ######## Neural Network ##########
-
 
 ######## Regression Trees ##########
 info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
