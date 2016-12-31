@@ -3,13 +3,13 @@ title: "Report"
 author: "Pedro Belém, Rui Fonseca, Tiago Botelho"
 date: "December 23, 2016"
 output:
-  html_document: default
   pdf_document:
     fig_height: 6
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 library(gdata)
 library(ggplot2)
 library(dplyr)
@@ -21,51 +21,192 @@ library(rpart.plot)
 library(MASS)
 ```
 
+
+
 ## Data Pre processing
 The data is read from the crime.xls file into a data frame
 ```{r}
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 ```
-We remove outliers by unix time days
+
+Next we remove outliers by unix time days
 ```{r}
-dates <- info$Date
-n_days <- day(days(ymd(dates)))
-info <- info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) & n_days <= quantile(n_days, .75) + 1.5*IQR(n_days), ]
+remove_outliers <- function(info) {
+  n_days <- day(days(ymd(info$Date)))
+  return(info[n_days >= quantile(n_days, .25) - 1.5*IQR(n_days) & n_days <= quantile(n_days, .75) + 1.5*IQR(n_days),])
+}
 ```
 
 Then, the unknown values (NA) are treated
 ```{r}
-info$BlockRange[info$BlockRange=='UNK'] <- NA
-info$Type[info$Type == '-'] <- NA
-info$Suffix[info$Suffix == '-'] <- NA
-info$Offense.Type[info$Offense.Type == '1'] <- NA
+na_handler <- function(info) {
+  info$Beat[info$Beat == 'UNK'] <- NA
+  info <- knnImputation(info, k=3)
+  info$BlockRange[info$BlockRange=='UNK'] <- NA
+  info$Type[info$Type == '-'] <- NA
+  info$Suffix[info$Suffix == '-'] <- NA
+  info$Beat <- as.character(info$Beat)
+  
+  return(info)
+}
 ```
-and the block range variable is modified. Since it is always a string like "X-Y", with X being a multiple of 100 and Y=X+99, we keep only X/100
+
+Tthe block range variable is modified. Since it is always a string like "X-Y", with X being a multiple of 100 and Y=X+99, we keep only X/100
 ```{r}
 split <- strsplit(as.character(info$BlockRange), "-")
 info$BlockRange <- order(sapply(split, "[", 1))
 ```
 
+
+We will also create a data frame that contains for each crime:
+
+* WeekDay: the day of the week when the crime happene
+* Beat: the police beat
+* DayInterval: the interval of the day in which the crime happened, following this criteria:
+    1. "Mourning" represented as "1", is from the hour interval 8 >= h > 12
+    2. "Afternoon" represented as "2", is from the hour interval 12 >= h > 19
+    3. "Night"represented as "3", is from the hour interval 19 >= h <= 23 of the same day, plus the hour interval 0 >= h > 8 of the following day
+* Year: the year in which the crime happened
+* Month: the month in which the crime occoured
+* Day: the day of the month in which the crime happened
+
+
+Create the data frame with the new collumns
+```{r}
+dataset_prep <- function(x, only.week=FALSE) {
+  x$Date <- ifelse(as.integer(x$Hour) < 8, as.character(as.Date(x$Date) - 1), as.character(x$Date))
+  
+  # Split info in time intervals
+  x$DayInterval <- 0
+  x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
+  x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
+  x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
+
+  if(only.week){
+    return(data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
+                      DayInterval = x$DayInterval,
+                      Beat = x$Beat,
+                      Offenses = x$X..offenses,
+                      stringsAsFactors = FALSE))
+  }
+  
+  return(data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
+                    DayInterval = x$DayInterval,
+                    Beat = x$Beat,
+                    Offenses = x$X..offenses,
+                    Day = day(x$Date),
+                    Month = month(x$Date),
+                    Year = year(x$Date),
+                    stringsAsFactors = FALSE))
+}
+```
+
+```{r echo = FALSE}
+get_days_between <- function(info) {
+  firstdate <- info$Date[order(format(as.Date(info$Date)))[1]]
+  lastdate <- info$Date[tail(order(format(as.Date(info$Date))), n=1)] 
+  
+  return(seq(as.Date(firstdate), as.Date(lastdate), by="days"))
+}
+```
+
+Create all permutations of missing 
+```{r}
+create_total_perm <- function(preprocessed, only.week = FALSE) {
+  days.between <- get_days_between(info)
+  unique_beats <- unique(preprocessed$Beat)
+  unique_day_intervals <- unique(preprocessed$DayInterval)
+  
+  if(only.week){
+    unique_weekdays <- unique(preprocessed$WeekDay)
+    all_beats_perm <- data.frame(WeekDay = rep(unique_weekdays, times=length(unique_beats) * length(unique_day_intervals)),
+                                 DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
+                                 Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
+                                 Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
+  } else{
+    all_beats_perm <- data.frame(Date = rep(days.between, times=length(unique_beats) * length(unique_day_intervals)),
+                                 DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
+                                 Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
+                                 Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
+    all_beats_perm$DayInterval <- as.integer(all_beats_perm$DayInterval)
+    all_beats_perm$Beat <- as.numeric(all_beats_perm$Beat)
+    all_beats_perm$Offenses <- as.character(all_beats_perm$Offenses)
+    all_beats_perm$WeekDay = as.integer(strftime(all_beats_perm$Date, "%u"))  
+    all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
+    all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
+    all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
+    all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
+  }
+  
+  return(all_beats_perm)
+}
+
+```
+
+
 ## Data Visualisation
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-library(gdata)
-library(ggplot2)
-library(dplyr)
-library(reshape2)
-library(tidyr)
-data_path <- "./crime.xls"
-info <- read.xls(data_path, sheet=1)
-info$BlockRange[info$BlockRange=='UNK'] <- NA
-info$Type[info$Type == '-'] <- NA
-info$Suffix[info$Suffix == '-'] <- NA
-
+```{r echo=FALSE}
+#this is the variable initialization
+info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
 split <- strsplit(as.character(info$BlockRange), "-")
-info$BlockRange <- order(sapply(split, "[", 1))
+info$BlockRange <- sapply(split, "[", 1)
 
+info.preprocessed <- dataset_prep(info)
+info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
+info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
+info.preprocessed.joined <- merge(x=info.preprocessed.total_perm, y=info.preprocessed.group, all=TRUE)
+
+
+info.preprocessed.onlyweek <- dataset_prep(info, only.week = TRUE)
+info.preprocessed.onlyweek.group <- group_by(info.preprocessed.onlyweek, WeekDay, DayInterval, Beat) %>% summarize(Offenses = sum(Offenses))
+info.preprocessed.onlyweek.total_perm <- create_total_perm(info.preprocessed, only.week = TRUE)
+```
+
+Creating graphics with the data, we can begin to find some usefull patterns in the data.
+
+```{r echo=FALSE}
+
+#number of crimes per beat with the types of crimes
+info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
+by_beat <- group_by(info.df, Beat)
+crime_count <- arrange(tally(by_beat), desc(n))
+# we only want the top ones
+top_beats <- head(crime_count)
+top_beat_crimes <- filter(info.df,info.df$Beat %in% top_beats$Beat)
+ggplot(top_beat_crimes, aes(x = Beat, fill=BlockRange)) + geom_bar(stat="count") + ggtitle("Distribution of crimes per beat")
+
+```
+
+```{r echo=FALSE}
+#number of crimes per Address (block range, streetname, type, suffix)
+info.df <- tbl_df(info)
+by_address <- group_by(info.df,BlockRange, StreetName, Type, Suffix)
+count <- arrange(tally(by_address), desc(n))
+#criar a morada com as outras colunas coladas
+count$d <- paste(count$BlockRange, count$StreetName,count$Type,count$Suffix)
+#remover os NA's depois, antes tava dificil
+count$d <- gsub(" NA","",count$d)
+count$d <- gsub("NA ","",count$d)
+#reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
+ggplot(head(count), aes(x=reorder(d,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per Address")
+```
+
+```{r echo=FALSE}
+#number of crimes per street name, Type and Suffix
+info.df <- tbl_df(info)
+by_street_type_suffix <- group_by(info.df, StreetName, Type, Suffix)
+count <- arrange(tally(by_street_type_suffix), desc(n))
+#criar a morada com as outras colunas coladas
+count$d <- paste(count$StreetName,count$Type,count$Suffix)
+#remover os NA's depois, antes tava dificil
+count$d <- gsub(" NA","",count$d)
+#reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
+ggplot(head(count), aes(x=reorder(d,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per Address except BlockRange")
+```
+
+```{r echo=FALSE}
 #number of crimes per street name
 info.df <- tbl_df(info)
 by_street <- group_by(info.df, StreetName)
@@ -75,20 +216,17 @@ ggplot(head(count), aes(x=reorder(StreetName,-n), y=n)) + geom_bar(stat="identit
 ```
 
 
-
 ```{r echo = FALSE}
-#number of crimes per beat with the types of crimes
-info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
-by_beat_with_group <- group_by(info.df, Beat, BlockRange)
-by_beat <- group_by(info.df, Beat)
-crime_count_with_group <- arrange(tally(by_beat_with_group), desc=-n)
-crime_count <- arrange(tally(by_beat), desc=-n)
-# we only want the top ones
-top_beats <- head(crime_count)
-top_crime_count_with_group <- crime_count_with_group[crime_count_with_group$Beat %in% top_beats$Beat,]
-top_crime_count_with_group <- subset(crime_count_with_group, Beat %in% top_beats$Beat)
-ggplot(top_crime_count_with_group, aes(reorder(Beat, -n), n, fill=BlockRange, order=BlockRange)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per beat")
+#number of crimes per hour and type
+ggplot(info, aes(x=Hour, color=Offense.Type)) + geom_histogram(binwidth = 1) + ggtitle("Distribution of crimes per hour and type")
+
+```
+
+```{r echo=FALSE}
+#number of crimes per hour and type
+ggplot(info, aes(x=Hour)) + geom_histogram(binwidth = 1) + facet_wrap(~ Offense.Type) + ggtitle("Distribution of crimes per hour and type")
+
 ```
 
 ##Data Prediction
-The question that we're going to answer is: since we know all these crimes that happen, how many offenses will occur, in a given day interval of a day, in a certain police beat. First, we slit the hours of a day into three diferent intervals. The first one is the mourning, starts at 8h(inclusive) until 12h(exclusive). The second one is in the afternoon, starts at 12h (inclusive) until 19h (exclusive). The third interval (night) starts at 19h(exclusive) and ends at 8h (exclusive) of the next day (e.g. if a crime happened at 4h of day 20, it will correspond to the night period of the day 19).
+The question that we're going to answer is: since we know all these crimes that happen, how many offenses will occur, in a given day interval of a day, in a certain police beat. 

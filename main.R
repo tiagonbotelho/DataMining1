@@ -92,6 +92,8 @@ create_total_perm <- function(preprocessed, only.week = FALSE) {
 }
 
 info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
+split <- strsplit(as.character(info$BlockRange), "-")
+info$BlockRange <- sapply(split, "[", 1)
 info.preprocessed <- dataset_prep(info)
 info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
 info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
@@ -152,20 +154,16 @@ get_total_dataset <- function(info) {
   all_perms <- dataset_prep() %>% create_total_perm()
 }
 
-
 #number of crimes per beat with the types of crimes
 info.df <- tbl_df(info) %>% drop_na(Beat, BlockRange)
-by_beat_with_group <- group_by(info.df, Beat, BlockRange)
 by_beat <- group_by(info.df, Beat)
-crime_count_with_group <- arrange(tally(by_beat_with_group), desc=-n)
-crime_count <- arrange(tally(by_beat), desc=-n)
+crime_count <- arrange(tally(by_beat), desc(n))
 # we only want the top ones
 top_beats <- head(crime_count)
-top_crime_count_with_group <- crime_count_with_group[crime_count_with_group$Beat %in% top_beats$Beat,]
-top_crime_count_with_group <- subset(crime_count_with_group, Beat %in% top_beats$Beat)
-ggplot(top_crime_count_with_group, aes(reorder(Beat, -n), n, fill=BlockRange, order=BlockRange)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per beat")
+top_beat_crimes <- filter(info.df,info.df$Beat %in% top_beats$Beat)
+ggplot(top_beat_crimes, aes(x = Beat, fill=BlockRange)) + geom_bar(stat="count") + ggtitle("Distribution of crimes per beat")
 
-#number of crimes per Address (block range, streetname, type, suffix) - all count 1
+#number of crimes per Address (block range, streetname, type, suffix)
 info.df <- tbl_df(info)
 by_address <- group_by(info.df,BlockRange, StreetName, Type, Suffix)
 count <- arrange(tally(by_address), desc(n))
@@ -195,6 +193,8 @@ by_street <- group_by(info.df, StreetName)
 count <- arrange(tally(by_street), desc(n))
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(StreetName,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per StreetName")
+
+
 #number of crimes per hour and type
-ggplot(info, aes(x=Hour, color=Offense.Type)) + geom_histogram(binwidth = 1) + ggtitle("Distribution of crimes per hour and type")
+ggplot(info, aes(x=Hour)) + geom_histogram(binwidth = 1) + facet_wrap(~ Offense.Type) + ggtitle("Distribution of crimes per hour and type")
 
