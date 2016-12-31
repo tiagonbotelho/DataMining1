@@ -18,6 +18,7 @@ library(tidyr)
 library(lubridate)
 library(DMwR)
 library(rpart.plot)
+library(nnet)
 library(MASS)
 load("./data.RData")
 ```
@@ -182,7 +183,7 @@ ggplot(info, aes(x=Hour)) + geom_histogram(binwidth = 1) + facet_wrap(~ Offense.
 
 ```{r echo=FALSE}
 offenses_by_weekday <- group_by(info.preprocessed, WeekDay) %>% summarise(Offenses = sum(Offenses))
-ggplot(offenses_by_weekday, aes(x=WeekDay, y=Offenses)) + geom_bar()
+ggplot(offenses_by_weekday, aes(x=WeekDay, y=Offenses)) + geom_bar(stat="identity")
 ```
 
 ##Data Prediction
@@ -314,8 +315,47 @@ info.preprocessed.joined[is.na(info.preprocessed.joined$Offenses.x),]$Offenses.x
 info.preprocessed.joined$Offenses <- info.preprocessed.joined$Offenses.x
 info.preprocessed.joined <- info.preprocessed.joined[,!colnames(info.preprocessed.joined) %in%
                                                        c("Offenses.y", "Offenses.x")]
+
+```
+We considered that the given data had all occorrences between the first and the last date of the set.
+
+Using a neural network
+
+```{r eval=FALSE}
+training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.70*nrow(info.preprocessed.joined)))
+train <- info.preprocessed.joined[training_index,]
+test <- info.preprocessed.joined[-training_index,]
+
+max.offenses <- max(info.preprocessed.joined$Offenses)
+nn <- nnet(Offenses / max.offenses ~ ., data = train, size=5, decay=0.05, maxit=1000)
+pred <- predict(nn, test) * max.offenses
+mse <- mean((pred - test$Offenses)^2)
+rmse = sqrt(mean((test$Offenses-pred)^2))
+```
+We get:
+
+- Root Mean Squared Error = 0.85
+- Mean Absolute Error = 0.72
+- Correlation between the predictions and the true values = 0.62
+
+Using a regression tree
+```{r eval=FALSE}
+training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.70*nrow(info.preprocessed.joined)))
+train <- info.preprocessed.joined[training_index,]
+test <- info.preprocessed.joined[-training_index,]
+ac <- rpartXse(Offenses ~ ., train)
+ps <- predict(ac, test, type="vector")
+#root mean squared error = 0.29
+mse = sqrt(mean((test$Offenses-ps)^2))
+#mean absolute error = 1.89
+mae <- mean(abs(ps - test$Offenses))
+#correlation between the predictions and the true values = 0.60
+cr <- cor(ps, test$Offenses)
+prp(ac, type=1, extra=101)
 ```
 
-We considered that the given data had all occorrences between the first and the last date of the set.\
 
-At this moment we have all the data structured and we can 
+We get:
+- Root Mean Squared Error = 0.85
+- Mean Absolute Error = 0.53
+- Correlation between the predictions and the true values = 0.59
