@@ -26,7 +26,7 @@ na_handler <- function(info) {
   return(info)
 }
 
-dataset_prep <- function(x) {
+dataset_prep <- function(x, only.week=FALSE) {
   x$Date <- ifelse(as.integer(x$Hour) < 8, as.character(as.Date(x$Date) - 1), as.character(x$Date))
   
   # Split info in time intervals
@@ -35,6 +35,14 @@ dataset_prep <- function(x) {
   x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
   x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
 
+  if(only.week){
+    return(data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
+                      DayInterval = x$DayInterval,
+                      Beat = x$Beat,
+                      Offenses = x$X..offenses,
+                      stringsAsFactors = FALSE))
+  }
+  
   return(data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
                     DayInterval = x$DayInterval,
                     Beat = x$Beat,
@@ -54,20 +62,27 @@ get_days_between <- function(info) {
   return(seq(as.Date(firstdate), as.Date(lastdate), by="days"))
 }
 
-create_total_perm <- function(preprocessed) {
+create_total_perm <- function(preprocessed, only.week = FALSE) {
   days.between <- get_days_between(info)
   unique_beats <- unique(preprocessed$Beat)
   unique_day_intervals <- unique(preprocessed$DayInterval)
   
-  all_beats_perm <- data.frame(Date = rep(days.between, times=length(unique_beats) * length(unique_day_intervals)),
-                               DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
-                               Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
-                               Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
-  
-  all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
-  all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
-  all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
-  all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
+  if(only.week){
+    unique_weekdays <- unique(preprocessed$WeekDay)
+    all_beats_perm <- data.frame(WeekDay = rep(unique_weekdays, times=length(unique_beats) * length(unique_day_intervals)),
+                                 DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
+                                 Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
+                                 Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
+  } else{
+    all_beats_perm <- data.frame(Date = rep(days.between, times=length(unique_beats) * length(unique_day_intervals)),
+                                 DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
+                                 Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
+                                 Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
+      all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
+      all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
+      all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
+      all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
+  }
   
   return(all_beats_perm)
 }
@@ -76,6 +91,9 @@ info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
 info.preprocessed <- dataset_prep(info)
 info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
 info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
+info.preprocessed.onlyweek <- dataset_prep(info, only.week = TRUE)
+info.preprocessed.onlyweek.group <- group_by(info.preprocessed.onlyweek, WeekDay, DayInterval, Beat) %>% summarize(Offenses = sum(Offenses))
+info.preprocessed.onlyweek.total_perm < create_total_perm(info.preprocessed, only.week = TRUE)
 
 ######## Neural Network ##########
 training_index <- sample(1:nrow(info.preprocessed.group),as.integer(0.7*nrow(info.preprocessed.group)))
@@ -88,7 +106,7 @@ nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
 
 
 get_total_dataset <- function(info) {
-  all_perms <- dataset_prep() %>% get_all_perms()
+  all_perms <- dataset_prep() %>% create_total_perm()
 }
 
 
