@@ -201,7 +201,7 @@ The first direction that we took to answer the problem was to create a new data 
 
 We will use this data to construct a model that predicts the Offenses number. We train the model with 70 percent of the data and test with the remaining 30 percent.
 
-Using a Regression Tree Model
+###Regression Tree Model
 
 
 ```{r}
@@ -230,7 +230,7 @@ We get:
 
 
 
-Using a Linear Discriminant Analysis
+###Linear Discriminant Analysis
 ```{r eval=FALSE}
 ######## Linear Discriminant Analysis ##########
 sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.99))
@@ -251,6 +251,22 @@ We get:
 
 - Mean Absolute Error = 0.248
 - Correlation between the predictions and the true values = 0.42
+
+###Multiple Linear Regression
+```{r}
+######## Multiple Linear Regression ##########
+sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.99))
+tr <- info.preprocessed.onlyweek.joined[sp,]
+ts <- info.preprocessed.onlyweek.joined[-sp,]
+lin.reg <- lm(Offenses ~ ., tr)
+final.lin.reg <- step(lin.reg)
+ps <- predict(final.lin.reg)
+regr.eval(ts$Offenses, ps)
+######## Multiple Linear Regression ##########
+```
+
+
+
 -----------------------------------
 
 

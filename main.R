@@ -190,9 +190,7 @@ ts <- info.preprocessed.onlyweek.joined[-sp,]
 lin.reg <- lm(Offenses ~ ., tr)
 final.lin.reg <- step(lin.reg)
 ps <- predict(final.lin.reg)
-
-
-summary(final.lin.reg)
+regr.eval(ts$Offenses, ps)
 ######## Multiple Linear Regression ##########
 
 
