@@ -21,6 +21,7 @@ na_handler <- function(info) {
   info$BlockRange[info$BlockRange=='UNK'] <- NA
   info$Type[info$Type == '-'] <- NA
   info$Suffix[info$Suffix == '-'] <- NA
+  info$Offense.Type[info$Offense.Type == "1"] <- NA
   info$Beat <- as.character(info$Beat)
   
   return(info)

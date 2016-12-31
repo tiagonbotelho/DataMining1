@@ -46,6 +46,7 @@ na_handler <- function(info) {
   info$BlockRange[info$BlockRange=='UNK'] <- NA
   info$Type[info$Type == '-'] <- NA
   info$Suffix[info$Suffix == '-'] <- NA
+  info$Offense.Type[info$Offense.Type == "1"] <- NA
   info$Beat <- as.character(info$Beat)
   
   return(info)
@@ -53,7 +54,7 @@ na_handler <- function(info) {
 ```
 
 
-Tthe block range variable is modified. Since it is always a string like "X-Y", with X being a multiple of 100 and Y=X+99, we keep only X/100
+The block range variable is modified. Since it is always a string like "X-Y", with X being a multiple of 100 and Y=X+99, we keep only X/100
 ```{r, eval = FALSE}
 split <- strsplit(as.character(info$BlockRange), "-")
 info$BlockRange <- order(sapply(split, "[", 1))
@@ -61,10 +62,9 @@ info$BlockRange <- order(sapply(split, "[", 1))
 
 
 
-We will also create a data frame that contains for each crime:
+We create new collumns to better explain the data:
 
-* WeekDay: the day of the week when the crime happene
-* Beat: the police beat
+* WeekDay: the day of the week when the crime happened
 * DayInterval: the interval of the day in which the crime happened, following this criteria:
     1. "Mourning" represented as "1", is from the hour interval 8 >= h > 12
     2. "Afternoon" represented as "2", is from the hour interval 12 >= h > 19
@@ -74,36 +74,6 @@ We will also create a data frame that contains for each crime:
 * Day: the day of the month in which the crime happened
 
 
-Create the data frame with the new collumns
-```{r}
-dataset_prep <- function(x, only.week=FALSE) {
-  x$Date <- ifelse(as.integer(x$Hour) < 8, as.character(as.Date(x$Date) - 1), as.character(x$Date))
-  
-  # Split info in time intervals
-  x$DayInterval <- 0
-  x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
-  x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
-  x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
-
-  if(only.week){
-    return(data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
-                      DayInterval = x$DayInterval,
-                      Beat = x$Beat,
-                      Offenses = x$X..offenses,
-                      stringsAsFactors = FALSE))
-  }
-  
-  return(data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
-                    DayInterval = x$DayInterval,
-                    Beat = x$Beat,
-                    Offenses = x$X..offenses,
-                    Day = day(x$Date),
-                    Month = month(x$Date),
-                    Year = year(x$Date),
-                    stringsAsFactors = FALSE))
-}
-```
-
 ```{r echo = FALSE}
 get_days_between <- function(info) {
   firstdate <- info$Date[order(format(as.Date(info$Date)))[1]]
@@ -112,40 +82,6 @@ get_days_between <- function(info) {
   return(seq(as.Date(firstdate), as.Date(lastdate), by="days"))
 }
 ```
-
-Create all permutations of missing 
-```{r}
-create_total_perm <- function(preprocessed, only.week = FALSE) {
-  days.between <- get_days_between(info)
-  unique_beats <- unique(preprocessed$Beat)
-  unique_day_intervals <- unique(preprocessed$DayInterval)
-  
-  if(only.week){
-    unique_weekdays <- unique(preprocessed$WeekDay)
-    all_beats_perm <- data.frame(WeekDay = rep(unique_weekdays, times=length(unique_beats) * length(unique_day_intervals)),
-                                 DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
-                                 Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
-                                 Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
-  } else{
-    all_beats_perm <- data.frame(Date = rep(days.between, times=length(unique_beats) * length(unique_day_intervals)),
-                                 DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
-                                 Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
-                                 Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
-    all_beats_perm$DayInterval <- as.integer(all_beats_perm$DayInterval)
-    all_beats_perm$Beat <- as.numeric(all_beats_perm$Beat)
-    all_beats_perm$Offenses <- as.character(all_beats_perm$Offenses)
-    all_beats_perm$WeekDay = as.integer(strftime(all_beats_perm$Date, "%u"))  
-    all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
-    all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
-    all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
-    all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
-  }
-  
-  return(all_beats_perm)
-}
-
-```
-
 
 ## Data Visualisation
 
@@ -232,9 +168,23 @@ ggplot(info, aes(x=Hour)) + geom_histogram(binwidth = 1) + facet_wrap(~ Offense.
 
 ##Data Prediction
 
-The question that we're going to answer is: since we know all these crimes that happen, how many offenses will occur, in a given day interval of a day, in a certain police beat. First, we slit the hours of a day into three diferent intervals. The first one is the mourning, starts at 8h(inclusive) until 12h(exclusive). The second one is in the afternoon, starts at 12h (inclusive) until 19h (exclusive). The third interval (night) starts at 19h(exclusive) and ends at 8h (exclusive) of the next day (e.g. if a crime happened at 4th of day 20, it will correspond to the night period of the day 19).
+The question that we're going to answer is: since we know all these crimes that happen, how many offenses will occur, in a given day interval of a day, in a certain police beat.
 We found that some columns of the original data aren't necessary for our predictive model. 
-Only some information for this problem is actually needed so We had to adapt the given data for this problem. First we noticed that the premise of the crimes are irrelevant and that the only necessary attribute to identify an area is the beat. So our final data model for this problem consists of
+Only some information for this problem is actually needed so We had to adapt the given data for this problem. First we noticed that the premise of the crimes are irrelevant and that the only necessary attribute to identify an area is the beat. 
+
+The first direction that we took to answer the problem was to create a new data frame with the follwing collunms:
+
+* WeekDay: the day of the week when the crime happene
+* Beat: the police beat
+* DayInterval: the interval of the day in which the crime happened
+* Offenses: The total number of offenses
+
+
+
+-----------------------------------
+
+
+So our final data model for this problem consists of
 
 DayInterval | Beat | Day | Month | Year | Offenses
 --------------------------------------------------
