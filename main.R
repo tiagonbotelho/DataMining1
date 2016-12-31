@@ -37,11 +37,13 @@ dataset_prep <- function(x, only.week=FALSE) {
   x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
 
   if(only.week){
-    return(data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
+    ret <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
                       DayInterval = x$DayInterval,
                       Beat = x$Beat,
                       Offenses = x$X..offenses,
-                      stringsAsFactors = FALSE))
+                      stringsAsFactors = FALSE)
+    ret <- group_by(ret, WeekDay, DayInterval, Beat) %>% summarize(Offenses = mean(Offenses))
+    return(ret)
   }
   ret <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
                     DayInterval = x$DayInterval,
@@ -71,10 +73,7 @@ create_total_perm <- function(preprocessed, only.week = FALSE) {
   
   if(only.week){
     unique_weekdays <- unique(preprocessed$WeekDay)
-    all_beats_perm <- data.frame(WeekDay = rep(unique_weekdays, times=length(unique_beats) * length(unique_day_intervals)),
-                                 DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
-                                 Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
-                                 Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
+    all_beats_perm <- expand.grid(Beat=unique_beats, WeekDay=unique_weekdays, DayInterval=unique_day_intervals, Offenses=0)
   } else{
     all_beats_perm <- data.frame(Date = rep(days.between, times=length(unique_beats) * length(unique_day_intervals)),
                                  DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
@@ -118,13 +117,17 @@ perc <- mean(abs(test$Offenses - pred)/test$Offenses)
 ######## Neural Network ##########
 
 info.preprocessed.onlyweek <- dataset_prep(info, only.week = TRUE)
-info.preprocessed.onlyweek.group <- group_by(info.preprocessed.onlyweek, WeekDay, DayInterval, Beat) %>% summarize(Offenses = sum(Offenses))
 info.preprocessed.onlyweek.total_perm <- create_total_perm(info.preprocessed, only.week = TRUE)
+info.preprocessed.onlyweek.joined <- merge(info.preprocessed.onlyweek, info.preprocessed.onlyweek.total_perm, 
+                                  by=c("WeekDay", "DayInterval", "Beat"), all=TRUE)
+info.preprocessed.onlyweek.joined[is.na(info.preprocessed.onlyweek.joined$Offenses.x),]$Offenses.x <- 0
+info.preprocessed.onlyweek.joined$Offenses <- info.preprocessed.onlyweek.joined$Offenses.x
+info.preprocessed.onlyweek.joined <- info.preprocessed.onlyweek.joined[,!colnames(info.preprocessed.onlyweek.joined) %in% c("Offenses.y", "Offenses.x")]
+
 ######## Regression Trees ##########
-info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
-sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.80))
-tr <- info.preprocessed.group[sp,]
-ts <- info.preprocessed.group[-sp,]
+sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.80))
+tr <- info.preprocessed.onlyweek.joined[sp,]
+ts <- info.preprocessed.onlyweek.joined[-sp,]
 ac <- rpartXse(Offenses ~ ., tr)
 ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
 ps <- predict(ac, ts, type="vector")
@@ -141,9 +144,9 @@ prp(ac, type=1, extra=101)
 
 
 ######## Linear Discriminant Analysis ##########
-sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.99))
-tr <- info.preprocessed.group[sp,]
-ts <- info.preprocessed.group[-sp,]
+sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.99))
+tr <- info.preprocessed.onlyweek.joined[sp,]
+ts <- info.preprocessed.onlyweek.joined[-sp,]
 ac <- lda(Offenses ~ ., tr)
 ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
 ps <- predict(ac, ts)
@@ -151,7 +154,7 @@ ps <- predict(ac, ts)
 
 
 ######## Multiple Linear Regression ##########
-linearRegression <- lm(Offenses ~ ., info.preprocessed.group)
+linearRegression <- lm(Offenses ~ ., info.preprocessed.onlyweek.joined)
 summary(linearRegression)
 ######## Multiple Linear Regression ##########
 
