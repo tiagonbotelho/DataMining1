@@ -96,7 +96,7 @@ info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Bea
 info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
 info.preprocessed.joined <- merge(info.preprocessed.group, info.preprocessed.total_perm, 
                                   by=c("WeekDay", "DayInterval", "Beat", "Day", "Month", "Year"), all=TRUE)
-info.preprocessed.joined[is.na(inner$Offenses.x),]$Offenses.x <- 0
+info.preprocessed.joined[is.na(info.preprocessed.joined$Offenses.x),]$Offenses.x <- 0
 info.preprocessed.joined$Offenses <- info.preprocessed.joined$Offenses.x
 info.preprocessed.joined <- info.preprocessed.joined[,!colnames(info.preprocessed.joined) %in% c("Offenses.y", "Offenses.x")]
 
@@ -106,9 +106,9 @@ info.preprocessed.onlyweek.group <- group_by(info.preprocessed.onlyweek, WeekDay
 info.preprocessed.onlyweek.total_perm <- create_total_perm(info.preprocessed, only.week = TRUE)
 
 ######## Neural Network ##########
-training_index <- sample(1:nrow(info.preprocessed.group),as.integer(0.7*nrow(info.preprocessed.group)))
-train <- info.preprocessed.group[training_index,]
-test <- info.preprocessed.group[-training_index,]
+training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.7*nrow(info.preprocessed.joined)))
+train <- info.preprocessed.joined[training_index,]
+test <- info.preprocessed.joined[-training_index,]
 
 nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
 (mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
