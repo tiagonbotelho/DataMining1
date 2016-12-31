@@ -131,14 +131,12 @@ ts <- info.preprocessed.onlyweek.joined[-sp,]
 ac <- rpartXse(Offenses ~ ., tr)
 ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
 ps <- predict(ac, ts, type="vector")
-#root mean squared error = 2.50
+#root mean squared error = 0.29
 mse = sqrt(mean((ts$Offenses-ps)^2))
 #mean absolute error = 1.89
 mae <- mean(abs(ps - ts$Offenses))
-#correlation between the predictions and the true values = 0.70
+#correlation between the predictions and the true values = 0.60
 cr <- cor(ps, ts$Offenses)
-#mean average percentage error = 0.63
-mape <- mean(abs(ts$Offenses-ps)/ts$Offenses)
 prp(ac, type=1, extra=101)
 ######## Regression Trees ##########
 
