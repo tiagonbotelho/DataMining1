@@ -64,9 +64,14 @@ create_total_perm <- function(preprocessed) {
                                Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
                                Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
   
-  all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
+  all_beats_perm$DayInterval <- as.integer(all_beats_perm$DayInterval)
+  all_beats_perm$Beat <- as.numeric(all_beats_perm$Beat)
+  all_beats_perm$Offenses <- as.character(all_beats_perm$Offenses)
+  
+  all_beats_perm$WeekDay = as.integer(strftime(all_beats_perm$Date, "%u"))
+  all_beats_perm$Day <- as.numeric(day(as.Date(all_beats_perm$Date)))
   all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
-  all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
+  all_beats_perm$Year <- as.integer(year(as.Date(all_beats_perm$Date)))
   all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
   
   return(all_beats_perm)
@@ -76,6 +81,7 @@ info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
 info.preprocessed <- dataset_prep(info)
 info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
 info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
+info.preprocessed.joined <- merge(x=info.preprocessed.total_perm, y=info.preprocessed.group, all=TRUE)
 
 ######## Neural Network ##########
 training_index <- sample(1:nrow(info.preprocessed.group),as.integer(0.7*nrow(info.preprocessed.group)))
