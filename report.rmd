@@ -200,26 +200,27 @@ Using a Regression Tree Model
 
 ```{r echo=FALSE}
 ######## Regression Trees ##########
-info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
-sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.99))
-tr <- info.preprocessed.group[sp,]
-ts <- info.preprocessed.group[-sp,]
+sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.80))
+tr <- info.preprocessed.onlyweek.joined[sp,]
+ts <- info.preprocessed.onlyweek.joined[-sp,]
 ac <- rpartXse(Offenses ~ ., tr)
 ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
 ps <- predict(ac, ts, type="vector")
-#root mean squared error = 2.50
-mse = sqrt(mean((ts$Offenses-ps)^2))
-#mean absolute error = 0.79
+#root mean squared error = 0.29
+rmse = sqrt(mean((ts$Offenses-ps)^2))
+#mean absolute error = 0.14
 mae <- mean(abs(ps - ts$Offenses))
-#correlation between the predictions and the true values = 0.31
+#correlation between the predictions and the true values = 0.60
 cr <- cor(ps, ts$Offenses)
-#mean average percentage error = 0.50
-mape <- mean(abs(ts$Offenses-ps)/ts$Offenses)
 prp(ac, type=1, extra=101)
 ######## Regression Trees ##########
 ```
 
-We get 
+We get:
+
+- Root Mean Squared Error = 0.29
+- Mean Absolute Error = 0.14
+- Correlation between the predictions and the true values = 0.60
 
 -----------------------------------
 
