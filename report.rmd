@@ -56,21 +56,14 @@ na_handler <- function(info) {
 ```
 
 
-The block range variable is modified. Since it is always a string like "X-Y", with X being a multiple of 100 and Y=X+99, we keep only X/100
-```{r, eval = FALSE}
-split <- strsplit(as.character(info$BlockRange), "-")
-info$BlockRange <- order(sapply(split, "[", 1))
-```
-
-
 
 We create new collumns to better explain the data:
 
 * WeekDay: the day of the week when the crime happened
 * DayInterval: the interval of the day in which the crime happened, following this criteria:
-    1. "Mourning" represented as "1", is from the hour interval 8 >= h > 12
+    1. "Morning" represented as "1", is from the hour interval 8 >= h > 12
     2. "Afternoon" represented as "2", is from the hour interval 12 >= h > 19
-    3. "Night"represented as "3", is from the hour interval 19 >= h <= 23 of the same day, plus the hour interval 0 >= h > 8 of the following day
+    3. "Night" represented as "3", is from the hour interval 19 >= h <= 23 of the same day, plus the hour interval 0 >= h > 8 of the following day
 * Year: the year in which the crime happened
 * Month: the month in which the crime occoured
 * Day: the day of the month in which the crime happened
@@ -87,7 +80,7 @@ get_days_between <- function(info) {
 
 ## Data Visualisation
 
-The following map is from the houston police department. As we can see, each police beat is linked to a specific area of the city
+The map in Figure 1. is from the houston police department. As we can see, each police beat is linked to a specific area of the city
 
 ![Houston police beat map](./beat_map.png)
 
@@ -188,9 +181,9 @@ ggplot(offenses_by_weekday, aes(x=WeekDay, y=Offenses)) + geom_bar(stat="identit
 
 ##Data Prediction
 
-The question that we're going to answer is: since we know all these crimes that happen, how many offenses will occur, in a given day interval of a day, in a certain police beat.
+The question that we're going to answer is: how many offenses will occur, in a given day interval of a date, in a certain police beat.
 We found that some columns of the original data aren't necessary for our predictive model. 
-Only some information for this problem is actually needed so We had to adapt the given data for this problem. First we noticed that the premise of the crimes are irrelevant and that the only necessary attribute to identify an area is the beat. 
+Only some information for this problem is actually needed so we had to adapt the given data for this problem. First we noticed that the premise of the crimes are irrelevant and that the only necessary attribute to identify an area is the beat. 
 
 The first direction that we took to answer the problem was to create a new data frame with the follwing collunms:
 
@@ -239,7 +232,7 @@ ts <- info.preprocessed.onlyweek.joined[-sp,]
 ac <- lda(Offenses ~ ., tr)
 ps <- predict(ac, ts)
 #root mean squared error = N.a.N.
-mse = sqrt(mean((ts$Offenses-as.numeric(levels(ps$class)[ps$class])^2)))
+rmse = sqrt(mean((ts$Offenses-as.numeric(levels(ps$class)[ps$class])^2)))
 #mean absolute error = 0.248
 mae <- mean(abs(as.numeric(levels(ps$class)[ps$class]) - ts$Offenses))
 #correlation between the predictions and the true values = 0.42
@@ -265,7 +258,27 @@ regr.eval(ts$Offenses, ps)
 ######## Multiple Linear Regression ##########
 ```
 
+###Neural network
 
+```{r eval=FALSE}
+training_index <- sample(1:nrow(info.preprocessed.onlyweek.joined),as.integer(0.70*nrow(info.preprocessed.onlyweek.joined)))
+train <- info.preprocessed.onlyweek.joined[training_index,]
+test <- info.preprocessed.onlyweek.joined[-training_index,]
+
+max.offenses <- max(info.preprocessed.onlyweek.joined$Offenses)
+nn <- nnet(Offenses / max.offenses ~ ., data = train, size=5, decay=0.05, maxit=1000)
+pred <- predict(nn, test) * max.offenses
+mse <- mean((pred - test$Offenses)^2)
+rmse = sqrt(mean((test$Offenses-pred)^2))
+mae <- mean(abs(pred - test$Offenses))
+cr <- cor(pred, test$Offenses)
+
+```
+We get:
+
+- Root Mean Squared Error = 0.28
+- Mean Absolute Error = 0.17
+- Correlation between the predictions and the true values = 0.54
 
 -----------------------------------
 
@@ -370,11 +383,14 @@ nn <- nnet(Offenses / max.offenses ~ ., data = train, size=5, decay=0.05, maxit=
 pred <- predict(nn, test) * max.offenses
 mse <- mean((pred - test$Offenses)^2)
 rmse = sqrt(mean((test$Offenses-pred)^2))
+mae <- mean(abs(pred - test$Offenses))
+cr <- cor(pred, test$Offenses)
+
 ```
 We get:
 
-- Root Mean Squared Error = 0.85
-- Mean Absolute Error = 0.72
+- Root Mean Squared Error = 0.29
+- Mean Absolute Error = 0.18
 - Correlation between the predictions and the true values = 0.62
 
 Using a regression tree
@@ -385,7 +401,7 @@ test <- info.preprocessed.joined[-training_index,]
 ac <- rpartXse(Offenses ~ ., train)
 ps <- predict(ac, test, type="vector")
 #root mean squared error = 0.29
-mse = sqrt(mean((test$Offenses-ps)^2))
+rmse = sqrt(mean((test$Offenses-ps)^2))
 #mean absolute error = 1.89
 mae <- mean(abs(ps - test$Offenses))
 #correlation between the predictions and the true values = 0.60
