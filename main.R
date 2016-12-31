@@ -79,7 +79,6 @@ create_total_perm <- function(preprocessed, only.week = FALSE) {
                                  Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
                                  Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
     all_beats_perm$DayInterval <- as.integer(all_beats_perm$DayInterval)
-    all_beats_perm$Beat <- as.numeric(all_beats_perm$Beat)
     all_beats_perm$Offenses <- as.character(all_beats_perm$Offenses)
     all_beats_perm$WeekDay = as.integer(strftime(all_beats_perm$Date, "%u"))  
     all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
@@ -95,7 +94,11 @@ info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
 info.preprocessed <- dataset_prep(info)
 info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
 info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
-info.preprocessed.joined <- merge(x=info.preprocessed.total_perm, y=info.preprocessed.group, all=TRUE)
+info.preprocessed.joined <- merge(info.preprocessed.group, info.preprocessed.total_perm, 
+                                  by=c("WeekDay", "DayInterval", "Beat", "Day", "Month", "Year"), all=TRUE)
+info.preprocessed.joined[is.na(inner$Offenses.x),]$Offenses.x <- 0
+info.preprocessed.joined$Offenses <- info.preprocessed.joined$Offenses.x
+info.preprocessed.joined <- info.preprocessed.joined[,!colnames(info.preprocessed.joined) %in% c("Offenses.y", "Offenses.x")]
 
 
 info.preprocessed.onlyweek <- dataset_prep(info, only.week = TRUE)
