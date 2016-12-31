@@ -111,9 +111,8 @@ train <- info.preprocessed.joined[training_index,]
 test <- info.preprocessed.joined[-training_index,]
 
 nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
-(mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
+mtrx <- table(predict(nn, test, class='integer', interval = c("none", "confidence", "prediction")), test$Offenses)
 ######## Neural Network ##########
-
 
 ######## Regression Trees ##########
 info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
