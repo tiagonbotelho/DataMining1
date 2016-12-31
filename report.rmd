@@ -1,5 +1,5 @@
 ---
-title: "Report"
+title: "Data Mining I - 1st Project"
 author: "Pedro Belém, Rui Fonseca, Tiago Botelho"
 date: "December 23, 2016"
 output:
@@ -289,6 +289,9 @@ We get:
 
 -----------------------------------
 
+We soon realised that this model was inaccurate because we can only predict the average number of offenses of a weekday. This model would only be useful if we didn`t have data for a certain weekday.
+
+We had to add the date to our data model so we could predict the number of offenses for a date.
 
 So our final data model for this problem consists of
 
@@ -378,7 +381,7 @@ info.preprocessed.joined <- info.preprocessed.joined[,!colnames(info.preprocesse
 ```
 We considered that the given data had all occorrences between the first and the last date of the set.
 
-Using a neural network
+###Using a neural network
 
 ```{r eval=FALSE}
 training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.70*nrow(info.preprocessed.joined)))
@@ -400,7 +403,7 @@ We get:
 - Mean Absolute Error = 0.18
 - Correlation between the predictions and the true values = 0.62
 
-Using a regression tree
+###Using a regression tree
 ```{r eval=FALSE}
 training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.70*nrow(info.preprocessed.joined)))
 train <- info.preprocessed.joined[training_index,]
@@ -418,11 +421,12 @@ prp(ac, type=1, extra=101)
 
 
 We get:
+
 - Root Mean Squared Error = 0.85
 - Mean Absolute Error = 0.53
 - Correlation between the predictions and the true values = 0.59
 
-Using a Linear Discriminant Analysis
+###Using a Linear Discriminant Analysis
 ```{r eval=FALSE}
 sp <- sample(1:nrow(info.preprocessed.joined), as.integer(nrow(info.preprocessed.joined)*0.70))
 tr <- info.preprocessed.onlyweek.joined[sp,]
@@ -435,5 +439,6 @@ mae <- mean(abs(as.numeric(levels(ps$class)[ps$class]) - ts$Offenses))
 cr <- cor(as.numeric(levels(ps$class)[ps$class]), ts$Offenses)
 ```
 We get:
+
 - Mean Absolute Error = 0.21
 - Correlation between the predictions and the true values = 0.48
