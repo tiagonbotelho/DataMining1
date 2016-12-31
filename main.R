@@ -115,10 +115,7 @@ nn <- nnet(Offenses / max.offenses ~ ., data = train, size=5, decay=0.05, maxit=
 pred <- predict(nn, test) * max.offenses
 MSE <- mean((pred - test$Offenses)^2)
 perc <- mean(abs(test$Offenses - pred)/test$Offenses)
-  
-  
 ######## Neural Network ##########
-
 
 ######## Regression Trees ##########
 info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
