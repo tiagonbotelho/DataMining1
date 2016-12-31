@@ -42,15 +42,16 @@ dataset_prep <- function(x, only.week=FALSE) {
                       Offenses = x$X..offenses,
                       stringsAsFactors = FALSE))
   }
-  
-  return(data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
+  ret <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
                     DayInterval = x$DayInterval,
                     Beat = x$Beat,
                     Offenses = x$X..offenses,
                     Day = day(x$Date),
                     Month = month(x$Date),
                     Year = year(x$Date),
-                    stringsAsFactors = FALSE))
+                    stringsAsFactors = FALSE)
+  ret <- group_by(ret, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
+  return(ret)
 }
 
 interval_beat_perms <- function(x) { return(expand.grid(DayInterval = unique(x$DayInterval), Beat = unique(x$Beat))) }
@@ -94,28 +95,30 @@ info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
 split <- strsplit(as.character(info$BlockRange), "-")
 info$BlockRange <- sapply(split, "[", 1)
 info.preprocessed <- dataset_prep(info)
-info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
 info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
-info.preprocessed.joined <- merge(info.preprocessed.group, info.preprocessed.total_perm, 
+info.preprocessed.joined <- merge(info.preprocessed, info.preprocessed.total_perm, 
                                   by=c("WeekDay", "DayInterval", "Beat", "Day", "Month", "Year"), all=TRUE)
 info.preprocessed.joined[is.na(info.preprocessed.joined$Offenses.x),]$Offenses.x <- 0
 info.preprocessed.joined$Offenses <- info.preprocessed.joined$Offenses.x
 info.preprocessed.joined <- info.preprocessed.joined[,!colnames(info.preprocessed.joined) %in% c("Offenses.y", "Offenses.x")]
 
 
-info.preprocessed.onlyweek <- dataset_prep(info, only.week = TRUE)
-info.preprocessed.onlyweek.group <- group_by(info.preprocessed.onlyweek, WeekDay, DayInterval, Beat) %>% summarize(Offenses = sum(Offenses))
-info.preprocessed.onlyweek.total_perm <- create_total_perm(info.preprocessed, only.week = TRUE)
 
 ######## Neural Network ##########
-training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.7*nrow(info.preprocessed.joined)))
+training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.95*nrow(info.preprocessed.joined)))
 train <- info.preprocessed.joined[training_index,]
 test <- info.preprocessed.joined[-training_index,]
 
-nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
-mtrx <- table(predict(nn, test, class='integer', interval = c("none", "confidence", "prediction")), test$Offenses)
+max.offenses <- max(info.preprocessed.joined$Offenses)
+nn <- nnet(Offenses / max.offenses ~ ., data = train, size=5, decay=0.05, maxit=1000)
+pred <- predict(nn, test) * max.offenses
+MSE <- mean((pred - test$Offenses)^2)
+perc <- mean(abs(test$Offenses - pred)/test$Offenses)
 ######## Neural Network ##########
 
+info.preprocessed.onlyweek <- dataset_prep(info, only.week = TRUE)
+info.preprocessed.onlyweek.group <- group_by(info.preprocessed.onlyweek, WeekDay, DayInterval, Beat) %>% summarize(Offenses = sum(Offenses))
+info.preprocessed.onlyweek.total_perm <- create_total_perm(info.preprocessed, only.week = TRUE)
 ######## Regression Trees ##########
 info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
 sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.80))

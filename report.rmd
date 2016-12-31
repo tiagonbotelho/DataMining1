@@ -24,13 +24,13 @@ library(MASS)
 
 
 ## Data Pre processing
-The data is read from the crime.xls file into a data frame
+We begin by reading the data from the crime.xls file into a data frame
 ```{r}
 data_path <- "./crime.xls"
 info <- read.xls(data_path, sheet=1)
 ```
 
-Next we remove outliers by unix time days
+Then we removed all the instances with outlier dates. To calculate the outliers we considered a date as the number of days since the beginning of unix time.
 ```{r}
 remove_outliers <- function(info) {
   n_days <- day(days(ymd(info$Date)))
@@ -38,7 +38,7 @@ remove_outliers <- function(info) {
 }
 ```
 
-Then, the unknown values (NA) are treated
+Then, we convert all the missing values to NA.
 ```{r}
 na_handler <- function(info) {
   info$Beat[info$Beat == 'UNK'] <- NA
@@ -52,11 +52,13 @@ na_handler <- function(info) {
 }
 ```
 
+
 Tthe block range variable is modified. Since it is always a string like "X-Y", with X being a multiple of 100 and Y=X+99, we keep only X/100
-```{r}
+```{r, eval = FALSE}
 split <- strsplit(as.character(info$BlockRange), "-")
 info$BlockRange <- order(sapply(split, "[", 1))
 ```
+
 
 
 We will also create a data frame that contains for each crime:
@@ -229,4 +231,95 @@ ggplot(info, aes(x=Hour)) + geom_histogram(binwidth = 1) + facet_wrap(~ Offense.
 ```
 
 ##Data Prediction
-The question that we're going to answer is: since we know all these crimes that happen, how many offenses will occur, in a given day interval of a day, in a certain police beat. 
+
+The question that we're going to answer is: since we know all these crimes that happen, how many offenses will occur, in a given day interval of a day, in a certain police beat. First, we slit the hours of a day into three diferent intervals. The first one is the mourning, starts at 8h(inclusive) until 12h(exclusive). The second one is in the afternoon, starts at 12h (inclusive) until 19h (exclusive). The third interval (night) starts at 19h(exclusive) and ends at 8h (exclusive) of the next day (e.g. if a crime happened at 4th of day 20, it will correspond to the night period of the day 19).
+We found that some columns of the original data aren't necessary for our predictive model. 
+Only some information for this problem is actually needed so We had to adapt the given data for this problem. First we noticed that the premise of the crimes are irrelevant and that the only necessary attribute to identify an area is the beat. So our final data model for this problem consists of
+
+DayInterval | Beat | Day | Month | Year | Offenses
+--------------------------------------------------
+
+To convert the given data to this data model, we start by adding the column with the correspondent day interval, and then we create a new data frame only with those column. As there are multiple crimes in the same day interval but we want the number of offenses of the day interval we sum the offenses on the same interval. 
+
+```{r}
+
+dataset_prep <- function(x) {
+  x$Date <- ifelse(as.integer(x$Hour) < 8,
+                   as.character(as.Date(x$Date) - 1), 
+                   as.character(x$Date))
+  
+  # Split info in time intervals
+  x$DayInterval <- 0
+  x[as.integer(x$Hour) < 8 | as.integer(x$Hour) >= 19,]$DayInterval <- 3
+  x[as.integer(x$Hour) >= 12 & as.integer(x$Hour) < 19,]$DayInterval <- 2
+  x[as.integer(x$Hour) >= 8 & as.integer(x$Hour) < 12,]$DayInterval <- 1
+
+  ret <- data.frame(WeekDay = as.integer(strftime(x$Date, "%u")),
+                    DayInterval = x$DayInterval,
+                    Beat = x$Beat,
+                    Offenses = x$X..offenses,
+                    Day = day(x$Date),
+                    Month = month(x$Date),
+                    Year = year(x$Date),
+                    stringsAsFactors = FALSE)
+  ret <- group_by(ret, WeekDay, DayInterval, Beat, Day, Month, Year) %>% 
+    summarize(Offenses = sum(Offenses))
+  
+  return(ret)
+}
+
+```
+
+At this moment we have the given data adjusted to the problem but we only have cases where was crimes, so we needed to generate all combinations with 0 offenses. 
+
+So we generate a new data frame with all combinations of DayInterval, Beat, Day, Month, Year and added to our data only the combinations missing, with Offenses as 0. To do that we merged the 2 data frames and removed the rows with duplicated combination (DayInterval, Beat, Day, Month, Year) and 0 Offenses. 
+```{r eval=FALSE}
+get_days_between <- function(info) {
+  firstdate <- info$Date[order(format(as.Date(info$Date)))[1]]
+  lastdate <- info$Date[tail(order(format(as.Date(info$Date))), n=1)] 
+  
+  return(seq(as.Date(firstdate), as.Date(lastdate), by="days"))
+}
+
+create_total_perm <- function(preprocessed) {
+  days.between <- get_days_between(info)
+  unique_beats <- unique(preprocessed$Beat)
+  unique_day_intervals <- unique(preprocessed$DayInterval)
+  
+  all_beats_perm <- data.frame(Date = rep(days.between, 
+                                          times=length(unique_beats) * 
+                                            length(unique_day_intervals)),
+                               DayInterval = rep(unique_day_intervals, 
+                                                 times=length(unique_beats) * 
+                                                   length(days.between)),
+                               Beat = rep(unique_beats, 
+                                          times=length(unique_day_intervals) * 
+                                            length(days.between)),
+                               Offenses = rep(0, 
+                                              times=length(unique_day_intervals) * 
+                                                length(days.between) * 
+                                                length(unique_beats)))
+  all_beats_perm$DayInterval <- as.integer(all_beats_perm$DayInterval)
+  all_beats_perm$Offenses <- as.character(all_beats_perm$Offenses)
+  all_beats_perm$WeekDay = as.integer(strftime(all_beats_perm$Date, "%u"))  
+  all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
+  all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
+  all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
+  all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
+  
+  return(all_beats_perm)
+}
+
+info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
+info.preprocessed.joined <- merge(info.preprocessed, info.preprocessed.total_perm, 
+                                  by=c("WeekDay", "DayInterval", "Beat", "Day", "Month", "Year"),
+                                  all=TRUE)
+info.preprocessed.joined[is.na(info.preprocessed.joined$Offenses.x),]$Offenses.x <- 0
+info.preprocessed.joined$Offenses <- info.preprocessed.joined$Offenses.x
+info.preprocessed.joined <- info.preprocessed.joined[,!colnames(info.preprocessed.joined) %in%
+                                                       c("Offenses.y", "Offenses.x")]
+```
+
+We considered that the given data had all occorrences between the first and the last date of the set.\
+
+At this moment we have all the data structured and we can 
