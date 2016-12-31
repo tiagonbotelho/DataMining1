@@ -180,6 +180,11 @@ ggplot(info, aes(x=Hour)) + geom_histogram(binwidth = 1) + facet_wrap(~ Offense.
 
 ```
 
+```{r echo=FALSE}
+offenses_by_weekday <- group_by(info.preprocessed, WeekDay) %>% summarise(Offenses = sum(Offenses))
+ggplot(offenses_by_weekday, aes(x=WeekDay, y=Offenses)) + geom_bar()
+```
+
 ##Data Prediction
 
 The question that we're going to answer is: since we know all these crimes that happen, how many offenses will occur, in a given day interval of a day, in a certain police beat.
