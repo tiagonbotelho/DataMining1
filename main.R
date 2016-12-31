@@ -161,14 +161,26 @@ sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.pre
 tr <- info.preprocessed.onlyweek.joined[sp,]
 ts <- info.preprocessed.onlyweek.joined[-sp,]
 ac <- lda(Offenses ~ ., tr)
-ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
 ps <- predict(ac, ts)
+#root mean squared error = N.a.N.
+mse = sqrt(mean((ts$Offenses-as.numeric(levels(ps$class)[ps$class])^2)))
+#mean absolute error = 0.248
+mae <- mean(abs(as.numeric(levels(ps$class)[ps$class]) - ts$Offenses))
+#correlation between the predictions and the true values = 0.42
+cr <- cor(as.numeric(levels(ps$class)[ps$class]), ts$Offenses)
 ######## Linear Discriminant Analysis ##########
 
 
 ######## Multiple Linear Regression ##########
-linearRegression <- lm(Offenses ~ ., info.preprocessed.onlyweek.joined)
-summary(linearRegression)
+sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.99))
+tr <- info.preprocessed.onlyweek.joined[sp,]
+ts <- info.preprocessed.onlyweek.joined[-sp,]
+lin.reg <- lm(Offenses ~ ., tr)
+final.lin.reg <- step(lin.reg)
+ps <- predict(final.lin.reg)
+
+
+summary(final.lin.reg)
 ######## Multiple Linear Regression ##########
 
 
