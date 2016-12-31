@@ -78,10 +78,14 @@ create_total_perm <- function(preprocessed, only.week = FALSE) {
                                  DayInterval = rep(unique_day_intervals, times=length(unique_beats) * length(days.between)),
                                  Beat = rep(unique_beats, times=length(unique_day_intervals) * length(days.between)),
                                  Offenses = rep(0, times=length(unique_day_intervals) * length(days.between) * length(unique_beats)))
-      all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
-      all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
-      all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
-      all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
+    all_beats_perm$DayInterval <- as.integer(all_beats_perm$DayInterval)
+    all_beats_perm$Beat <- as.numeric(all_beats_perm$Beat)
+    all_beats_perm$Offenses <- as.character(all_beats_perm$Offenses)
+    all_beats_perm$WeekDay = as.integer(strftime(all_beats_perm$Date, "%u"))  
+    all_beats_perm$Day <- day(as.Date(all_beats_perm$Date))
+    all_beats_perm$Month <- month(as.Date(all_beats_perm$Date))
+    all_beats_perm$Year <- year(as.Date(all_beats_perm$Date))
+    all_beats_perm <- all_beats_perm[,!colnames(all_beats_perm) %in% c("Date")]
   }
   
   return(all_beats_perm)
@@ -91,9 +95,12 @@ info <- read.xls(data_path, sheet=1) %>% remove_outliers %>% na_handler
 info.preprocessed <- dataset_prep(info)
 info.preprocessed.group <- group_by(info.preprocessed, WeekDay, DayInterval, Beat, Day, Month, Year) %>% summarize(Offenses = sum(Offenses))
 info.preprocessed.total_perm <- create_total_perm(info.preprocessed)
+info.preprocessed.joined <- merge(x=info.preprocessed.total_perm, y=info.preprocessed.group, all=TRUE)
+
+
 info.preprocessed.onlyweek <- dataset_prep(info, only.week = TRUE)
 info.preprocessed.onlyweek.group <- group_by(info.preprocessed.onlyweek, WeekDay, DayInterval, Beat) %>% summarize(Offenses = sum(Offenses))
-info.preprocessed.onlyweek.total_perm < create_total_perm(info.preprocessed, only.week = TRUE)
+info.preprocessed.onlyweek.total_perm <- create_total_perm(info.preprocessed, only.week = TRUE)
 
 ######## Neural Network ##########
 training_index <- sample(1:nrow(info.preprocessed.group),as.integer(0.7*nrow(info.preprocessed.group)))
@@ -103,6 +110,42 @@ test <- info.preprocessed.group[-training_index,]
 nn <- nnet(Offenses ~ ., train, size=5, decay=0.01, maxit=1000)
 (mtrx <- table(predict(nn, newdata=test, class='integer'), test$Offenses))
 ######## Neural Network ##########
+
+
+######## Regression Trees ##########
+info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
+sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.80))
+tr <- info.preprocessed.group[sp,]
+ts <- info.preprocessed.group[-sp,]
+ac <- rpartXse(Offenses ~ ., tr)
+ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
+ps <- predict(ac, ts, type="vector")
+#root mean squared error = 2.50
+mse = sqrt(mean((ts$Offenses-ps)^2))
+#mean absolute error = 1.89
+mae <- mean(abs(ps - ts$Offenses))
+#correlation between the predictions and the true values = 0.70
+cr <- cor(ps, ts$Offenses)
+#mean average percentage error = 0.63
+mape <- mean(abs(ts$Offenses-ps)/ts$Offenses)
+prp(ac, type=1, extra=101)
+######## Regression Trees ##########
+
+
+######## Linear Discriminant Analysis ##########
+sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.99))
+tr <- info.preprocessed.group[sp,]
+ts <- info.preprocessed.group[-sp,]
+ac <- lda(Offenses ~ ., tr)
+ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
+ps <- predict(ac, ts)
+######## Linear Discriminant Analysis ##########
+
+
+######## Multiple Linear Regression ##########
+linearRegression <- lm(Offenses ~ ., info.preprocessed.group)
+summary(linearRegression)
+######## Multiple Linear Regression ##########
 
 
 get_total_dataset <- function(info) {
@@ -125,15 +168,12 @@ ggplot(top_crime_count_with_group, aes(reorder(Beat, -n), n, fill=BlockRange, or
 #number of crimes per Address (block range, streetname, type, suffix) - all count 1
 info.df <- tbl_df(info)
 by_address <- group_by(info.df,BlockRange, StreetName, Type, Suffix)
-head(by_address)
 count <- arrange(tally(by_address), desc(n))
-head(count)
 #criar a morada com as outras colunas coladas
 count$d <- paste(count$BlockRange, count$StreetName,count$Type,count$Suffix)
 #remover os NA's depois, antes tava dificil
 count$d <- gsub(" NA","",count$d)
 count$d <- gsub("NA ","",count$d)
-head(count)
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(d,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per Address")
 
@@ -146,7 +186,6 @@ count <- arrange(tally(by_street_type_suffix), desc(n))
 count$d <- paste(count$StreetName,count$Type,count$Suffix)
 #remover os NA's depois, antes tava dificil
 count$d <- gsub(" NA","",count$d)
-head(count)
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(d,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per StreetName, Type and Suffix")
 
@@ -154,39 +193,8 @@ ggplot(head(count), aes(x=reorder(d,-n), y=n)) + geom_bar(stat="identity") + ggt
 info.df <- tbl_df(info)
 by_street <- group_by(info.df, StreetName)
 count <- arrange(tally(by_street), desc(n))
-head(count)
 #reorder porque o x ficava ordenado por ordem alfabetica e quero pelo n, e -n para ficar por ordem descendente.
 ggplot(head(count), aes(x=reorder(StreetName,-n), y=n)) + geom_bar(stat="identity") + ggtitle("Distribution of crimes per StreetName")
 #number of crimes per hour and type
 ggplot(info, aes(x=Hour, color=Offense.Type)) + geom_histogram(binwidth = 1) + ggtitle("Distribution of crimes per hour and type")
 
-
-#Regression Trees
-info.preprocessed.group$Offenses <- as.integer(info.preprocessed.group$Offenses)
-sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.80))
-tr <- info.preprocessed.group[sp,]
-ts <- info.preprocessed.group[-sp,]
-ac <- rpartXse(Offenses ~ ., tr)
-ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
-ps <- predict(ac, ts, type="vector")
-#root mean squared error = 2.50
-mse = sqrt(mean((ts$Offenses-ps)^2))
-#mean absolute error = 1.89
-mae <- mean(abs(ps - ts$Offenses))
-#correlation between the predictions and the true values = 0.70
-cr <- cor(ps, ts$Offenses)
-#mean average percentage error = 0.63
-mape <- mean(abs(ts$Offenses-ps)/ts$Offenses)
-prp(ac, type=1, extra=101)
-
-#Linear Discriminant Analysis (LDA)
-sp <- sample(1:nrow(info.preprocessed.group), as.integer(nrow(info.preprocessed.group)*0.99))
-tr <- info.preprocessed.group[sp,]
-ts <- info.preprocessed.group[-sp,]
-ac <- lda(Offenses ~ ., tr)
-ac$xlevels[["y"]] <- union(ac$xlevels[["y"]], levels(ts$Offenses))
-ps <- predict(ac, ts)
-
-#Multiple Linear Regression
-linearRegression <- lm(Offenses ~ ., info.preprocessed.group)
-summary(linearRegression)
