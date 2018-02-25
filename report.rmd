@@ -186,7 +186,7 @@ ggplot(offenses_by_weekday, aes(x=WeekDay, y=Offenses)) + geom_bar(stat="identit
 ```
 The day of the week with more offenses is day 5.
 
-##Data Prediction
+## Data Prediction
 
 The question that we're going to answer is: how many offenses will occur, in a given day interval of a date, in a certain police beat.
 We found that some columns of the original data aren't necessary for our predictive model. 
@@ -201,11 +201,12 @@ The first direction that we took to answer the problem was to create a new data 
 
 We will use this data to construct a model that predicts the Offenses number. We train the model with 70 percent of the data and test with the remaining 30 percent.
 
-###Regression Tree Model
+
+# Regression Tree Model
 
 
 ```{r}
-######## Regression Trees ##########
+###### Regression Trees ##########
 sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.80))
 tr <- info.preprocessed.onlyweek.joined[sp,]
 ts <- info.preprocessed.onlyweek.joined[-sp,]
@@ -230,7 +231,7 @@ We get:
 
 
 
-###Linear Discriminant Analysis
+### Linear Discriminant Analysis
 ```{r eval=FALSE}
 ######## Linear Discriminant Analysis ##########
 sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.99))
@@ -252,7 +253,7 @@ We get:
 - Mean Absolute Error = 0.248
 - Correlation between the predictions and the true values = 0.42
 
-###Multiple Linear Regression
+### Multiple Linear Regression
 ```{r}
 ######## Multiple Linear Regression ##########
 sp <- sample(1:nrow(info.preprocessed.onlyweek.joined), as.integer(nrow(info.preprocessed.onlyweek.joined)*0.99))
@@ -265,7 +266,7 @@ regr.eval(ts$Offenses, ps)
 ######## Multiple Linear Regression ##########
 ```
 
-###Neural network
+### Neural network
 
 ```{r eval=FALSE}
 training_index <- sample(1:nrow(info.preprocessed.onlyweek.joined),as.integer(0.70*nrow(info.preprocessed.onlyweek.joined)))
@@ -381,7 +382,7 @@ info.preprocessed.joined <- info.preprocessed.joined[,!colnames(info.preprocesse
 ```
 We considered that the given data had all occorrences between the first and the last date of the set.
 
-###Using a neural network
+### Using a neural network
 
 ```{r eval=FALSE}
 training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.70*nrow(info.preprocessed.joined)))
@@ -403,7 +404,7 @@ We get:
 - Mean Absolute Error = 0.18
 - Correlation between the predictions and the true values = 0.62
 
-###Using a regression tree
+### Using a regression tree
 ```{r eval=FALSE}
 training_index <- sample(1:nrow(info.preprocessed.joined),as.integer(0.70*nrow(info.preprocessed.joined)))
 train <- info.preprocessed.joined[training_index,]
@@ -426,7 +427,7 @@ We get:
 - Mean Absolute Error = 0.53
 - Correlation between the predictions and the true values = 0.59
 
-###Using a Linear Discriminant Analysis
+### Using a Linear Discriminant Analysis
 ```{r eval=FALSE}
 sp <- sample(1:nrow(info.preprocessed.joined), as.integer(nrow(info.preprocessed.joined)*0.70))
 tr <- info.preprocessed.onlyweek.joined[sp,]
